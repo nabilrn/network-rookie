@@ -54,12 +54,23 @@ export interface ActionResponse {
   message: string;
 }
 
+export interface MissionResponse {
+  type: 'mission';
+  id: string;
+  title: string;
+  goal: string;
+  fromId: string;
+  toId: string;
+  hint: string;
+}
+
 export type GeminiPayload =
   | JourneyResponse
   | ExplainResponse
   | ScenarioResponse
   | FactResponse
-  | ActionResponse;
+  | ActionResponse
+  | MissionResponse;
 
 type GeminiChatContext = {
   selectedCity: number | null;
@@ -145,9 +156,10 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
   const schema = `Allowed JSON response shapes only:
 1) {"type":"journey","fromId":"cityId","toId":"cityId","steps":[{"emoji":"...","title":"...","body":"..."},{"emoji":"...","title":"...","body":"..."},{"emoji":"...","title":"...","body":"..."},{"emoji":"...","title":"...","body":"..."}],"story":"two short sentences"}
 2) {"type":"explain","content":"max 80 words, plain English","analogy":"one sentence analogy","highlightCityId":"optional cityId"}
-3) {"type":"scenario","mode":"high-load|packet-loss|cable-cut","story":"plain English narration"}
+3) {"type":"scenario","mode":"high-load|packet-loss|cable-cut","story":"plain English narration with 4 lines: What/Why/Impact/What-to-do"}
 4) {"type":"fact","emoji":"...","content":"max 30 words"}
-5) {"type":"action","action":"SET_MODE|FOCUS_CITY","payload":"mode or cityId","message":"plain English narration"}`;
+5) {"type":"action","action":"SET_MODE|FOCUS_CITY","payload":"mode or cityId","message":"plain English narration"}
+6) {"type":"mission","id":"unique mission id","title":"mission name","goal":"mission objective in plain English","fromId":"source cityId","toId":"destination cityId","hint":"helpful hint for the user"}`;
 
   if (simplified) {
     return [
@@ -290,6 +302,20 @@ function parsePayload(rawText: string): GeminiPayload {
     }
 
     return payload as ActionResponse;
+  }
+
+  if (payload.type === 'mission') {
+    if (
+      typeof payload.id !== 'string' ||
+      typeof payload.title !== 'string' ||
+      typeof payload.goal !== 'string' ||
+      typeof payload.fromId !== 'string' ||
+      typeof payload.toId !== 'string' ||
+      typeof payload.hint !== 'string'
+    ) {
+      throw new Error('Invalid mission payload');
+    }
+    return payload as MissionResponse;
   }
 
   throw new Error('Unknown payload type');

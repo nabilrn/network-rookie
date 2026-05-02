@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import type { KeyboardEvent } from 'react';
-import { useGeminiChat, type JourneyResponse, type GeminiPayload } from '../hooks/useGeminiChat';
+import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse } from '../hooks/useGeminiChat';
+import { MissionCard } from './MissionCard';
+import type { Mission } from '../hooks/useAppState';
 import './ChatInterface.css';
 
 interface DisplayMessage {
@@ -21,9 +23,13 @@ interface ChatInterfaceProps {
   selectedArc: number | null;
   simulationMode: string | null;
   osiStep: number | null;
+  activeMission: Mission | null;
   onJourney: (payload: JourneyResponse) => void;
   onScenario: (mode: string) => void;
   onAction?: (action: 'SET_MODE' | 'FOCUS_CITY', payload: string) => void;
+  onMissionStart?: (mission: Mission) => void;
+  onMissionComplete?: () => void;
+  onMissionReset?: () => void;
 }
 
 export interface ChatInterfaceRef {
@@ -31,7 +37,7 @@ export interface ChatInterfaceRef {
 }
 
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, onJourney, onScenario, onAction }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset }, ref) => {
     const [inputValue, setInputValue] = useState('');
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
@@ -93,6 +99,16 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         onScenario(lastPayload.mode);
       } else if (lastPayload.type === 'action') {
         onAction?.(lastPayload.action, lastPayload.payload);
+      } else if (lastPayload.type === 'mission') {
+        const mission: Mission = {
+          id: lastPayload.id,
+          title: lastPayload.title,
+          goal: lastPayload.goal,
+          fromId: lastPayload.fromId,
+          toId: lastPayload.toId,
+          status: 'inactive',
+        };
+        // Mission card will be rendered, user can click Start
       }
     }, [lastPayload, onJourney, onScenario, onAction]);
 
@@ -230,6 +246,26 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           <span className="sim-mode-guide-detail"><strong>User impact:</strong> {modeGuide.impact}</span>
         </div>
       </div>
+
+      {/* Mission Card */}
+      {activeMission && lastPayload?.type === 'mission' && (
+        <div className="mission-container">
+          <MissionCard
+            mission={activeMission}
+            onStart={() => {
+              const missionToStart: Mission = {
+                ...activeMission,
+                status: 'active',
+              };
+              onMissionStart?.(missionToStart);
+              // Focus on the source city
+              onAction?.('FOCUS_CITY', activeMission.fromId);
+            }}
+            onComplete={() => onMissionComplete?.()}
+            onReset={() => onMissionReset?.()}
+          />
+        </div>
+      )}
 
       {/* Chat Messages */}
       <div className="chat-messages" ref={messagesContainerRef}>

@@ -2,6 +2,7 @@ import { useRef, forwardRef, useImperativeHandle } from 'react';
 import { ChatInterface, ChatInterfaceRef } from './ChatInterface';
 import { resolveCityIndex } from '../data/network';
 import type { JourneyResponse } from '../hooks/useGeminiChat';
+import type { Mission } from '../hooks/useAppState';
 import './RightPanel.css';
 
 interface RightPanelProps {
@@ -9,10 +10,14 @@ interface RightPanelProps {
   selectedArc: number | null;
   simulationMode: string | null;
   osiStep: number | null;
+  activeMission: Mission | null;
   setOsiStep: (step: number | null) => void;
   onClearSelection?: () => void;
   onCitySelect?: (cityIndex: number | null) => void;
   onModeChange?: (mode: string | null) => void;
+  onMissionStart?: (mission: Mission) => void;
+  onMissionComplete?: () => void;
+  onMissionReset?: () => void;
 }
 
 export interface RightPanelRef {
@@ -20,7 +25,7 @@ export interface RightPanelRef {
 }
 
 export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, setOsiStep, onClearSelection, onCitySelect, onModeChange }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, setOsiStep, onClearSelection, onCitySelect, onModeChange, onMissionStart, onMissionComplete, onMissionReset }, ref) => {
     const chatRef = useRef<ChatInterfaceRef>(null);
 
     useImperativeHandle(ref, () => ({
@@ -70,9 +75,13 @@ export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
           selectedArc={selectedArc}
           simulationMode={simulationMode}
           osiStep={osiStep}
+          activeMission={activeMission}
           onJourney={handleJourney}
           onScenario={handleScenario}
           onAction={handleAction}
+          onMissionStart={onMissionStart}
+          onMissionComplete={onMissionComplete}
+          onMissionReset={onMissionReset}
         />
       </div>
     );

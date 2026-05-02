@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react';
 
+export type MissionStatus = 'inactive' | 'active' | 'success' | 'failed';
+
+export interface Mission {
+  id: string;
+  title: string;
+  goal: string;
+  fromId: string;
+  toId: string;
+  status: MissionStatus;
+  completedAt?: number;
+}
+
 // Get initial theme from localStorage or system preference
 const getInitialTheme = (): 'dark' | 'light' => {
   // Check localStorage first
@@ -22,6 +34,7 @@ export function useAppState() {
   const [simulationMode, setSimulationMode] = useState<string | null>(null);
   const [osiStep, setOsiStep] = useState<number | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme);
+  const [activeMission, setActiveMission] = useState<Mission | null>(null);
 
   // Save theme to localStorage whenever it changes
   useEffect(() => {
@@ -30,6 +43,26 @@ export function useAppState() {
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  const startMission = (mission: Mission) => {
+    setActiveMission({ ...mission, status: 'active' });
+  };
+
+  const completeMission = () => {
+    if (activeMission) {
+      setActiveMission({ ...activeMission, status: 'success', completedAt: Date.now() });
+    }
+  };
+
+  const failMission = () => {
+    if (activeMission) {
+      setActiveMission({ ...activeMission, status: 'failed' });
+    }
+  };
+
+  const resetMission = () => {
+    setActiveMission(null);
   };
 
   return {
@@ -44,5 +77,11 @@ export function useAppState() {
     theme,
     setTheme,
     toggleTheme,
+    activeMission,
+    setActiveMission,
+    startMission,
+    completeMission,
+    failMission,
+    resetMission,
   };
 }

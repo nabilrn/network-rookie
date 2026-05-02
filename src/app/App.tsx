@@ -20,6 +20,10 @@ export default function App() {
     setOsiStep,
     theme,
     toggleTheme,
+    activeMission,
+    startMission,
+    completeMission,
+    resetMission,
   } = useAppState();
 
   const globeSectionRef = useRef<GlobeSectionRef>(null);
@@ -67,10 +71,14 @@ export default function App() {
           selectedArc={selectedArc}
           simulationMode={simulationMode}
           osiStep={osiStep}
+          activeMission={activeMission}
           setOsiStep={setOsiStep}
           onClearSelection={handleClearSelection}
           onCitySelect={setSelectedCity}
           onModeChange={setSimulationMode}
+          onMissionStart={startMission}
+          onMissionComplete={completeMission}
+          onMissionReset={resetMission}
         />
       </div>
       <Footer />
