@@ -216,3 +216,25 @@ src/components/PacketDots.tsx
 src/components/ChatInterface.tsx
 Setelah selesai, build dan laporkan hasil per acceptance criteria.
 ```
+
+---
+
+## Progress Update (Current Session)
+
+### ✅ Completed
+- **Fase 1:** Data enrichment (riskType, backupRouteIds, congestionScore, recoveryHint for all 15 connections)
+- **Fase 4:** Visual language (arc thickness varies by congestion, backup route indicator in cable-cut mode)
+- **Fase 2:** Mission Mode foundation (MissionCard component, mission state management, AI mission generation support)
+
+### 📊 Summary
+- 3/6 phases complete (60%)
+- All builds passing
+- Ready for Fase 3 (Compare Panel)
+
+### 🔄 Next Steps (In Order)
+1. **Fase 3 - Before/After Compare:** Create ModeComparePanel with latency/distance/retry metrics
+2. **Fase 5 - Decision Simulation:** Add trade-off decision UI and simulate consequences
+3. **Fase 6 - Polish:** Finalize tone, consistency, performance
+
+### 🎯 To Resume
+After usage reset, continue with: pnpm run build && implement Fase 3 ModeComparePanel
