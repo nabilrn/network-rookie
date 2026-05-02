@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import type { KeyboardEvent } from 'react';
-import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse } from '../hooks/useGeminiChat';
+import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse, type DecisionResponse } from '../hooks/useGeminiChat';
 import { MissionCard } from './MissionCard';
+import { DecisionCard } from './DecisionCard';
 import { ModeComparePanel } from './ModeComparePanel';
 import type { Mission } from '../hooks/useAppState';
+import { getDecisionForMode, calculateConsequence, narrateConsequence } from '../utils/simulationDecisionEngine';
 import './ChatInterface.css';
 
 interface DisplayMessage {
@@ -33,6 +35,7 @@ interface ChatInterfaceProps {
   onMissionComplete?: () => void;
   onMissionReset?: () => void;
   onToggleCompare?: () => void;
+  onDecision?: (decisionPayload: DecisionResponse) => void;
 }
 
 export interface ChatInterfaceRef {
@@ -40,8 +43,9 @@ export interface ChatInterfaceRef {
 }
 
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare, onDecision }, ref) => {
     const [inputValue, setInputValue] = useState('');
+    const [activeDecision, setActiveDecision] = useState<DecisionResponse | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
     const { messages, loading, error, lastPayload, send, clear, retry, chips } = useGeminiChat({
@@ -112,8 +116,11 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           status: 'inactive',
         };
         // Mission card will be rendered, user can click Start
+      } else if (lastPayload.type === 'decision') {
+        setActiveDecision(lastPayload);
+        onDecision?.(lastPayload);
       }
-    }, [lastPayload, onJourney, onScenario, onAction]);
+    }, [lastPayload, onJourney, onScenario, onAction, onDecision]);
 
     useImperativeHandle(ref, () => ({
       reset: () => {
@@ -282,6 +289,35 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             }}
             onComplete={() => onMissionComplete?.()}
             onReset={() => onMissionReset?.()}
+          />
+        </div>
+      )}
+
+      {/* Decision Card */}
+      {activeDecision && (
+        <div className="decision-container">
+          <DecisionCard
+            decision={{
+              id: activeDecision.mode,
+              mode: activeDecision.mode,
+              question: activeDecision.question,
+              options: activeDecision.options.map((opt) => ({
+                ...opt,
+                emoji: opt.label.split(' ')[0],
+              })),
+              recommended: activeDecision.recommended,
+              why: activeDecision.why,
+            }}
+            onSelectOption={(optionId) => {
+              const selectedOption = activeDecision.options.find((opt) => opt.id === optionId);
+              if (selectedOption) {
+                const consequence = calculateConsequence(activeDecision.mode, optionId);
+                const narration = narrateConsequence(consequence, selectedOption.label);
+                send(narration);
+                setActiveDecision(null);
+              }
+            }}
+            isLoading={loading}
           />
         </div>
       )}

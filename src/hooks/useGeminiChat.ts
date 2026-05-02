@@ -64,13 +64,27 @@ export interface MissionResponse {
   hint: string;
 }
 
+export interface DecisionResponse {
+  type: 'decision';
+  mode: 'high-load' | 'packet-loss' | 'cable-cut';
+  question: string;
+  options: Array<{
+    id: string;
+    label: string;
+    description: string;
+  }>;
+  recommended: string;
+  why: string;
+}
+
 export type GeminiPayload =
   | JourneyResponse
   | ExplainResponse
   | ScenarioResponse
   | FactResponse
   | ActionResponse
-  | MissionResponse;
+  | MissionResponse
+  | DecisionResponse;
 
 type GeminiChatContext = {
   selectedCity: number | null;
@@ -159,7 +173,8 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
 3) {"type":"scenario","mode":"high-load|packet-loss|cable-cut","story":"plain English narration with 4 lines: What/Why/Impact/What-to-do"}
 4) {"type":"fact","emoji":"...","content":"max 30 words"}
 5) {"type":"action","action":"SET_MODE|FOCUS_CITY","payload":"mode or cityId","message":"plain English narration"}
-6) {"type":"mission","id":"unique mission id","title":"mission name","goal":"mission objective in plain English","fromId":"source cityId","toId":"destination cityId","hint":"helpful hint for the user"}`;
+6) {"type":"mission","id":"unique mission id","title":"mission name","goal":"mission objective in plain English","fromId":"source cityId","toId":"destination cityId","hint":"helpful hint for the user"}
+7) {"type":"decision","mode":"high-load|packet-loss|cable-cut","question":"user choice question","options":[{"id":"option1","label":"emoji Option 1","description":"brief"},{"id":"option2","label":"emoji Option 2","description":"brief"}],"recommended":"option1","why":"why this is better"}`;
 
   if (simplified) {
     return [
@@ -316,6 +331,24 @@ function parsePayload(rawText: string): GeminiPayload {
       throw new Error('Invalid mission payload');
     }
     return payload as MissionResponse;
+  }
+
+  if (payload.type === 'decision') {
+    if (
+      !['high-load', 'packet-loss', 'cable-cut'].includes(payload.mode as string) ||
+      typeof payload.question !== 'string' ||
+      !Array.isArray(payload.options) ||
+      payload.options.length < 2 ||
+      typeof payload.recommended !== 'string' ||
+      typeof payload.why !== 'string'
+    ) {
+      throw new Error('Invalid decision payload');
+    }
+    const opts = payload.options as Array<{ id: string; label: string; description: string }>;
+    if (!opts.every(opt => typeof opt.id === 'string' && typeof opt.label === 'string' && typeof opt.description === 'string')) {
+      throw new Error('Invalid decision options');
+    }
+    return payload as DecisionResponse;
   }
 
   throw new Error('Unknown payload type');
