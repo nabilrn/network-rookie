@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle }
 import type { KeyboardEvent } from 'react';
 import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse } from '../hooks/useGeminiChat';
 import { MissionCard } from './MissionCard';
+import { ModeComparePanel } from './ModeComparePanel';
 import type { Mission } from '../hooks/useAppState';
 import './ChatInterface.css';
 
@@ -24,12 +25,14 @@ interface ChatInterfaceProps {
   simulationMode: string | null;
   osiStep: number | null;
   activeMission: Mission | null;
+  compareMode: boolean;
   onJourney: (payload: JourneyResponse) => void;
   onScenario: (mode: string) => void;
   onAction?: (action: 'SET_MODE' | 'FOCUS_CITY', payload: string) => void;
   onMissionStart?: (mission: Mission) => void;
   onMissionComplete?: () => void;
   onMissionReset?: () => void;
+  onToggleCompare?: () => void;
 }
 
 export interface ChatInterfaceRef {
@@ -37,7 +40,7 @@ export interface ChatInterfaceRef {
 }
 
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare }, ref) => {
     const [inputValue, setInputValue] = useState('');
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
@@ -245,7 +248,23 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           <span className="sim-mode-guide-detail"><strong>Why it happens:</strong> {modeGuide.cause}</span>
           <span className="sim-mode-guide-detail"><strong>User impact:</strong> {modeGuide.impact}</span>
         </div>
+
+        {/* Compare Mode Toggle */}
+        <button
+          className={`compare-toggle ${compareMode ? 'compare-active' : ''}`}
+          disabled={loading || activeMode === 'normal'}
+          onClick={() => onToggleCompare?.()}
+          title="Toggle before/after comparison view"
+        >
+          📊 Compare: Normal vs {activeMode === 'normal' ? 'Current' : activeMode.replace('-', ' ')}
+        </button>
       </div>
+
+      {/* Compare Panel */}
+      <ModeComparePanel
+        mode={(activeMode as any) || 'normal'}
+        isVisible={compareMode && activeMode !== 'normal'}
+      />
 
       {/* Mission Card */}
       {activeMission && lastPayload?.type === 'mission' && (

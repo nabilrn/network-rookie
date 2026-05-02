@@ -35,6 +35,7 @@ export function useAppState() {
   const [osiStep, setOsiStep] = useState<number | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
+  const [compareMode, setCompareMode] = useState<boolean>(false);
 
   // Save theme to localStorage whenever it changes
   useEffect(() => {
@@ -65,6 +66,10 @@ export function useAppState() {
     setActiveMission(null);
   };
 
+  const toggleCompareMode = () => {
+    setCompareMode(prev => !prev);
+  };
+
   return {
     selectedCity,
     setSelectedCity,
@@ -83,5 +88,8 @@ export function useAppState() {
     completeMission,
     failMission,
     resetMission,
+    compareMode,
+    setCompareMode,
+    toggleCompareMode,
   };
 }

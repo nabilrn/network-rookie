@@ -84,22 +84,33 @@ Tambah state global di `useAppState.ts`:
 
 ---
 
-## Fase 3 — Before/After Compare
+## Fase 3 — Before/After Compare ✅ DONE
 ### 3.1 Compare panel
-Tambahkan komponen baru: `src/components/ModeComparePanel.tsx`
-- Menampilkan metrik Before vs After:
-  - latency (friendly label),
-  - route distance,
-  - retry level,
-  - service quality.
+✅ Tambahkan komponen baru: `src/components/ModeComparePanel.tsx`
+- ✅ Menampilkan metrik Before vs After:
+  - ✅ latency (friendly label),
+  - ✅ route distance,
+  - ✅ retry level,
+  - ✅ service quality.
 
 ### 3.2 Toggle compare
-Di `ChatInterface`:
-- tombol `Compare: Normal vs Current Mode`
-- jika aktif, panel compare sticky di atas chat.
+✅ Di `ChatInterface`:
+- ✅ tombol `Compare: Normal vs Current Mode`
+- ✅ jika aktif, panel compare sticky di atas chat.
 
 ### 3.3 Sumber data compare
-Awalnya gunakan rule-based local calc dari `network.ts`, lalu AI hanya narasi.
+✅ Gunakan rule-based local calc dari `network.ts`, AI hanya narasi.
+
+### 3.4 Implementation summary
+- Created `src/utils/compareMetrics.ts` with calculateConnectionMetrics() and calculateAggregateMetrics()
+- Created `src/components/ModeComparePanel.tsx` with metric cards (latency, distance, retry/stability)
+- Created `src/components/ModeComparePanel.css` with mode-specific theming
+- Added compareMode state to `useAppState.ts` with toggleCompareMode() handler
+- Wired compareMode and onToggleCompare through entire component tree (App → RightPanel → ChatInterface)
+- Added compare toggle button in ChatInterface sim-control-bar
+- Compare panel shows only when compareMode=true AND activeMode !== 'normal'
+- All metrics use friendly labels and delta calculations with percentage changes
+- Build verified: ✅ 0 errors, 0 TS warnings
 
 ---
 
@@ -154,10 +165,10 @@ Buat helper `src/utils/simulationDecisionEngine.ts`:
 ---
 
 ## Urutan eksekusi paling efisien (disarankan)
-1. Fase 1 (data + payload types)  
-2. Fase 4 (visual beda tegas)  
-3. Fase 2 (mission mode)  
-4. Fase 3 (compare panel)  
+1. ✅ Fase 1 (data + payload types)  
+2. ✅ Fase 4 (visual beda tegas)  
+3. ✅ Fase 2 (mission mode)  
+4. ✅ Fase 3 (compare panel) ← **JUST COMPLETED**
 5. Fase 5 (decision simulation)  
 6. Fase 6 (polish)
 

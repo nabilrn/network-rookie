@@ -11,7 +11,9 @@ interface RightPanelProps {
   simulationMode: string | null;
   osiStep: number | null;
   activeMission: Mission | null;
+  compareMode: boolean;
   setOsiStep: (step: number | null) => void;
+  toggleCompareMode: () => void;
   onClearSelection?: () => void;
   onCitySelect?: (cityIndex: number | null) => void;
   onModeChange?: (mode: string | null) => void;
@@ -25,7 +27,7 @@ export interface RightPanelRef {
 }
 
 export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, setOsiStep, onClearSelection, onCitySelect, onModeChange, onMissionStart, onMissionComplete, onMissionReset }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, setOsiStep, toggleCompareMode, onClearSelection, onCitySelect, onModeChange, onMissionStart, onMissionComplete, onMissionReset }, ref) => {
     const chatRef = useRef<ChatInterfaceRef>(null);
 
     useImperativeHandle(ref, () => ({
@@ -76,9 +78,11 @@ export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
           simulationMode={simulationMode}
           osiStep={osiStep}
           activeMission={activeMission}
+          compareMode={compareMode}
           onJourney={handleJourney}
           onScenario={handleScenario}
           onAction={handleAction}
+          onToggleCompare={toggleCompareMode}
           onMissionStart={onMissionStart}
           onMissionComplete={onMissionComplete}
           onMissionReset={onMissionReset}

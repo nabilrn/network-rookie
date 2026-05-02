@@ -24,6 +24,8 @@ export default function App() {
     startMission,
     completeMission,
     resetMission,
+    compareMode,
+    toggleCompareMode,
   } = useAppState();
 
   const globeSectionRef = useRef<GlobeSectionRef>(null);
@@ -72,7 +74,9 @@ export default function App() {
           simulationMode={simulationMode}
           osiStep={osiStep}
           activeMission={activeMission}
+          compareMode={compareMode}
           setOsiStep={setOsiStep}
+          toggleCompareMode={toggleCompareMode}
           onClearSelection={handleClearSelection}
           onCitySelect={setSelectedCity}
           onModeChange={setSimulationMode}
