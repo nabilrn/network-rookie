@@ -29,6 +29,52 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.globe-sim-badge {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 560px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--amber) 32%, transparent);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 20;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.globe-sim-badge--warn {
+  border-color: rgba(245, 158, 11, 0.62);
+  background: color-mix(in srgb, #f59e0b 14%, var(--surface));
+}
+
+.globe-sim-badge--loss {
+  border-color: rgba(14, 116, 144, 0.62);
+  background: color-mix(in srgb, #0891b2 14%, var(--surface));
+}
+
+.globe-sim-badge--danger {
+  border-color: rgba(239, 68, 68, 0.62);
+  background: color-mix(in srgb, #ef4444 14%, var(--surface));
+}
+
+.globe-sim-badge-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-bright);
+  margin-bottom: 3px;
+}
+
+.globe-sim-badge-detail {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
 @keyframes hintPulse {
   0%, 100% {
     opacity: 1;
@@ -92,7 +138,26 @@
 .city-dialog-flag {
   font-size: 42px;
   line-height: 1;
+}
+
+.city-dialog-flag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 4px;
+}
+
+.city-dialog-country-code {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
 }
 
 .city-dialog-name {

@@ -63,7 +63,16 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
       <div className="selection-drawer state-c">
         <div className="drawer-header-row">
           <h3 className="drawer-header">
-            {fromCity.flag} {fromCity.name} → {toCity.flag} {toCity.name}
+            <span className="drawer-route-flag">
+              <span>{fromCity.flag}</span>
+              <span className="drawer-country-code">{fromCity.countryCode}</span>
+            </span>
+            {fromCity.name} →
+            <span className="drawer-route-flag">
+              <span>{toCity.flag}</span>
+              <span className="drawer-country-code">{toCity.countryCode}</span>
+            </span>
+            {toCity.name}
           </h3>
           <button className="drawer-back" onClick={onBack}>
             ← back
@@ -96,11 +105,12 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
 
   return (
     <div className="selection-drawer state-b">
-      <div className="drawer-header-row">
-        <h3 className="drawer-header drawer-city-header">
-          <span className="drawer-city-flag">{city.flag}</span>
-          <span>{city.name}</span>
-        </h3>
+        <div className="drawer-header-row">
+          <h3 className="drawer-header drawer-city-header">
+            <span className="drawer-city-flag">{city.flag}</span>
+            <span className="drawer-country-code">{city.countryCode}</span>
+            <span>{city.name}</span>
+          </h3>
         <button className="drawer-back" onClick={onBack}>
           ← back
         </button>

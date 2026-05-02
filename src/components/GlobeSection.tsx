@@ -135,7 +135,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     // Zoom OUT when simulation mode changes (dramatic overview effect)
     else if (modeChanged) {
       if (controls) controls.autoRotate = false;
-      globe.pointOfView({ lat: 20, lng: 0, altitude: 2.4 }, 1500);
+      globe.pointOfView({ lat: 14, lng: 0, altitude: 1.58 }, 1000);
       
       // Resume rotation after zoom-out animation
       setTimeout(() => {
@@ -145,7 +145,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             currentControls.autoRotate = true;
           }
         }
-      }, 1800);
+      }, 1400);
       setHintVisible(false);
     }
     // Reset state — resume rotation
@@ -215,6 +215,8 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
     const globe = globeRef.current;
     const isLightTheme = currentThemeRef.current === 'light';
+    const isPacketLossMode = STATE.simulationMode === 'packet-loss';
+    const isCableCutMode = STATE.simulationMode === 'cable-cut';
     const dimmedArcOpacity = isLightTheme ? 0.35 : 0.15;
     const flickerMinOpacity = isLightTheme ? 0.55 : 0.3;
     const flickerRange = isLightTheme ? 0.45 : 0.7;
@@ -241,11 +243,33 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       return STATE.selectedCity === i ? accentColor : '#e8a020';
     });
 
-    // Update arc stroke width — thicker for selected
+    // Update arc stroke width — thicker for selected, AND vary by congestion in high-load mode
     globe.arcStroke((d: any, i: number) => {
-      if (STATE.selectedArc === i) return 1.2;
-      return isLightTheme ? 0.72 : 0.5;
+      let baseStroke = isLightTheme ? 0.72 : 0.5;
+      
+      // In high-load mode, vary thickness based on congestion
+      if (STATE.simulationMode === 'high-load') {
+        const conn = CONNECTIONS[i];
+        if (conn) {
+          // congestionScore 0-100 → thickness multiplier 0.8-1.8
+          const congestionFactor = 0.8 + (conn.congestionScore / 100) * 1.0;
+          baseStroke = baseStroke * congestionFactor;
+        }
+      }
+      
+      if (STATE.selectedArc === i) return baseStroke + 0.4; // Add 0.4 for selected
+      return baseStroke;
     });
+
+    const dashLength = isCableCutMode ? 0.12 : isPacketLossMode ? 0.18 : 0.25;
+    const dashGap = isCableCutMode ? 1.2 : isPacketLossMode ? 1.0 : 0.75;
+    const dashAnimateBase = isPacketLossMode ? 950 : isCableCutMode ? 1500 : STATE.simulationMode === 'high-load' ? 1300 : 1800;
+    const dashAnimateJitter = isPacketLossMode ? 550 : 1200;
+
+    globe
+      .arcDashLength(dashLength)
+      .arcDashGap(dashGap)
+      .arcDashAnimateTime(() => dashAnimateBase + Math.random() * dashAnimateJitter);
 
     // Update arc color with opacity based on selection state AND simulation mode
     globe.arcColor((d: any, i: number) => {
@@ -255,11 +279,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       // Override base color based on simulation mode
       if (STATE.simulationMode === 'high-load') {
         baseColor = isLightTheme ? '#b45309' : '#e8a020'; // All amber in high load
-      } else if (STATE.simulationMode === 'packet-loss') {
+      } else if (isPacketLossMode) {
         baseColor = isLightTheme ? '#b91c1c' : '#c97860'; // All rose in packet loss
         useFlickerOpacity = true;
-      } else if (STATE.simulationMode === 'cable-cut') {
-        // Cable cut: selected arc turns red, others stay normal
+      } else if (isCableCutMode) {
+        // Cable cut: all routes turn muted steel, selected route turns red
+        baseColor = isLightTheme ? '#64748b' : '#94a3b8';
         if (STATE.selectedArc === i) {
           baseColor = '#ef4444'; // Red for cut cable
         }
@@ -312,28 +337,81 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     }
 
     // Cable cut mode: add labels/markers for selected arc
-    if (STATE.simulationMode === 'cable-cut' && STATE.selectedArc !== null && arcsDataRef.current.length > 0) {
-      const cutArc = arcsDataRef.current[STATE.selectedArc];
-      const labelsData = [{
-        lat: (cutArc.startLat + cutArc.endLat) / 2,
-        lng: (cutArc.startLng + cutArc.endLng) / 2,
-        text: '✕',
-        color: '#ef4444',
-        size: 1.5,
-      }];
+    const labelsData: Array<{ lat: number; lng: number; text: string; color: string; size: number }> = [];
 
-      globe
-        .labelsData(labelsData)
-        .labelLat('lat')
-        .labelLng('lng')
-        .labelText('text')
-        .labelSize('size')
-        .labelColor('color')
-        .labelDotRadius(0.3)
-        .labelAltitude(0.01);
-    } else {
-      globe.labelsData([]);
+    if (isPacketLossMode && arcsDataRef.current.length > 0) {
+      const step = Math.max(1, Math.floor(arcsDataRef.current.length / 5));
+      for (let i = 0; i < arcsDataRef.current.length && labelsData.length < 5; i += step) {
+        const arc = arcsDataRef.current[i];
+        labelsData.push({
+          lat: (arc.startLat + arc.endLat) / 2,
+          lng: (arc.startLng + arc.endLng) / 2,
+          text: '↺',
+          color: isLightTheme ? '#b45309' : '#f59e0b',
+          size: 1.05,
+        });
+      }
     }
+
+    if (isCableCutMode && arcsDataRef.current.length > 0) {
+      if (STATE.selectedArc !== null) {
+        const cutArc = arcsDataRef.current[STATE.selectedArc];
+        const conn = CONNECTIONS[STATE.selectedArc];
+        
+        labelsData.push(
+          {
+            lat: (cutArc.startLat + cutArc.endLat) / 2,
+            lng: (cutArc.startLng + cutArc.endLng) / 2,
+            text: '✕',
+            color: '#ef4444',
+            size: 1.6,
+          },
+          {
+            lat: cutArc.startLat,
+            lng: cutArc.startLng,
+            text: '⚠',
+            color: '#ef4444',
+            size: 1.0,
+          },
+          {
+            lat: cutArc.endLat,
+            lng: cutArc.endLng,
+            text: '⚠',
+            color: '#ef4444',
+            size: 1.0,
+          },
+        );
+        
+        // Add backup route indicator when alternatives exist
+        if (conn && conn.backupRouteIds.length > 0) {
+          labelsData.push({
+            lat: (cutArc.startLat + cutArc.endLat) / 2 + 0.5,
+            lng: (cutArc.startLng + cutArc.endLng) / 2,
+            text: '🔄 Rerouting',
+            color: '#22c55e',
+            size: 0.85,
+          });
+        }
+      } else {
+        labelsData.push({
+          lat: 14,
+          lng: 0,
+          text: '⚠',
+          color: '#ef4444',
+          size: 1.25,
+        });
+      }
+    }
+
+    globe
+      .labelsData(labelsData)
+      .labelLat('lat')
+      .labelLng('lng')
+      .labelText('text')
+      .labelSize('size')
+      .labelColor('color')
+      .labelDotRadius(0.3)
+      .labelAltitude(0.01);
 
     console.log('🎯 Render — City:', STATE.selectedCity, '| Arc:', STATE.selectedArc, '| Mode:', STATE.simulationMode);
   };
@@ -406,13 +484,18 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         const tooltipText = theme === 'light' ? '#ea8c0d' : '#e8a020';
         const tooltipMuted = theme === 'light' ? '#64748b' : '#364050';
         const flag = d.flag || '🌐';
+        const countryCode = typeof d.countryCode === 'string' ? d.countryCode : '';
 
         return `
           <div style="font-family:Inter,system-ui,sans-serif;font-size:13px;
             background:${tooltipBg};border:1px solid ${tooltipBorder};
             padding:8px 12px;border-radius:6px;color:${tooltipText};
             max-width:240px;white-space:normal;line-height:1.5;">
-            <div style="font-size:16px;font-weight:700;margin-bottom:4px;">${flag} ${d.name}</div>
+            <div style="font-size:16px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+              <span>${flag}</span>
+              <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:999px;border:1px solid ${tooltipBorder};background:color-mix(in srgb, ${tooltipText} 12%, transparent);">${countryCode}</span>
+              <span>${d.name}</span>
+            </div>
             <div style="color:${tooltipMuted};font-size:11px;line-height:1.45;">${d.friendlyFact}</div>
           </div>
         `;
@@ -666,6 +749,29 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
   // Get selected city data for overlay
   const selectedCityData = selectedCity !== null ? CITIES[selectedCity] : null;
+  const simulationBadge =
+    simulationMode === 'packet-loss'
+      ? {
+          tone: 'loss',
+          title: '📶 Packet Loss',
+          detail: 'Dropped data pieces are being re-sent. Look for unstable routes and retry markers.',
+        }
+      : simulationMode === 'cable-cut'
+        ? {
+            tone: 'danger',
+            title: '✂️ Cable Break',
+            detail:
+              selectedArc !== null
+                ? 'A route is cut. Red X and warning markers show the disrupted link and endpoints.'
+                : 'Tap any route to simulate a cable cut. All routes are muted to highlight outage mode.',
+          }
+        : simulationMode === 'high-load'
+          ? {
+              tone: 'warn',
+              title: '🚦 Rush Hour',
+              detail: 'Traffic demand is high. Watch routes become denser and busier across hubs.',
+            }
+          : null;
 
   const closeCityDialog = () => {
     STATE.selectedCity = null;
@@ -691,6 +797,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           👆 Tap any city to begin
         </div>
       )}
+      {simulationBadge && (
+        <div className={`globe-sim-badge globe-sim-badge--${simulationBadge.tone}`}>
+          <div className="globe-sim-badge-title">{simulationBadge.title}</div>
+          <div className="globe-sim-badge-detail">{simulationBadge.detail}</div>
+        </div>
+      )}
 
       {/* City Info Dialog */}
       {selectedCityData && (
@@ -700,7 +812,10 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           style={{ left: `${cityDialogPosition.left}px`, top: `${cityDialogPosition.top}px` }}
           key={selectedCity}
         >
-          <div className="city-dialog-flag">{selectedCityData.flag}</div>
+          <div className="city-dialog-flag-row">
+            <div className="city-dialog-flag">{selectedCityData.flag}</div>
+            <div className="city-dialog-country-code">{selectedCityData.countryCode}</div>
+          </div>
           <div className="city-dialog-name">{selectedCityData.name}</div>
           <div className="city-dialog-region">{selectedCityData.region}</div>
           <div className="city-dialog-divider" />

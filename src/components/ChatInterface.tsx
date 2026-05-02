@@ -153,6 +153,40 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
     // Determine active sim mode for chip highlighting
     const activeMode = simulationMode || 'normal';
+    const activeModeGuide: Record<string, { title: string; observe: string; cause: string; impact: string }> = {
+      normal: {
+        title: '🌐 Normal',
+        observe: 'Traffic flows smoothly with stable route brightness and no major rerouting.',
+        cause: 'Demand is steady, routes are healthy, and there are no major outages.',
+        impact: 'Apps feel fast and consistent for most users.',
+      },
+      'high-load': {
+        title: '🚦 Rush Hour',
+        observe: 'More routes look busy and some paths start to queue.',
+        cause: 'Peak evening traffic, viral live events, game updates, or major app releases.',
+        impact: 'Video may buffer more and response time can feel slower.',
+      },
+      'packet-loss': {
+        title: '📶 Packet Loss',
+        observe: 'Traffic appears unstable because some small data pieces must be sent again.',
+        cause: 'Weak wireless signal, overloaded links, interference, or damaged/noisy connections.',
+        impact: 'Calls can stutter, games lag, and pages may feel jumpy to load.',
+      },
+      'cable-cut': {
+        title: '✂️ Cable Break',
+        observe: 'A route drops and traffic reroutes through longer backup paths.',
+        cause: 'Ship anchors, undersea earthquakes, fishing activity, or construction accidents.',
+        impact: 'Some regions see slower speeds until alternate routes fully absorb the traffic.',
+      },
+    };
+    const modeGuide = activeModeGuide[activeMode] ?? activeModeGuide.normal;
+    const modeGuideTone: Record<string, string> = {
+      normal: 'normal',
+      'high-load': 'warn',
+      'packet-loss': 'loss',
+      'cable-cut': 'danger',
+    };
+    const guideTone = modeGuideTone[activeMode] ?? 'normal';
 
   return (
     <div className="chat-interface">
@@ -163,31 +197,37 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           <button
             className={`sim-chip ${activeMode === 'normal' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('normal', 'Set the network to normal mode and explain what normal traffic looks like')}
+            onClick={() => void handleSimChip('normal', 'Set the network to normal mode. Explain in 3 short lines with these labels: "What you see:", "Why it happens:", "User impact:". Keep it plain English.')}
           >
             🌐 Normal
           </button>
           <button
             className={`sim-chip sim-warn ${activeMode === 'high-load' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('high-load', 'Simulate rush hour / high load on the global network and explain what happens')}
+            onClick={() => void handleSimChip('high-load', 'Simulate rush hour / high load. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear real-world causes in plain English.')}
           >
             🚦 Rush Hour
           </button>
           <button
             className={`sim-chip sim-warn ${activeMode === 'packet-loss' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('packet-loss', 'Simulate packet loss on the network and explain what packet loss means')}
+            onClick={() => void handleSimChip('packet-loss', 'Simulate packet loss. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Explain packet as small pieces of data and include clear causes.')}
           >
             📶 Packet Loss
           </button>
           <button
             className={`sim-chip sim-danger ${activeMode === 'cable-cut' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('cable-cut', 'Simulate a cable break / cable cut and explain the impact on global internet')}
+            onClick={() => void handleSimChip('cable-cut', 'Simulate a cable break. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear causes like anchors or earthquakes in plain English.')}
           >
             ✂️ Cable Break
           </button>
+        </div>
+        <div className={`sim-mode-guide sim-mode-guide--${guideTone}`}>
+          <span className="sim-mode-guide-title">{modeGuide.title}</span>
+          <span className="sim-mode-guide-detail"><strong>What you see:</strong> {modeGuide.observe}</span>
+          <span className="sim-mode-guide-detail"><strong>Why it happens:</strong> {modeGuide.cause}</span>
+          <span className="sim-mode-guide-detail"><strong>User impact:</strong> {modeGuide.impact}</span>
         </div>
       </div>
 
@@ -298,6 +338,40 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
   const trimmed = text.trim();
   if (!trimmed) return { text: '', showGlobeHint: false };
 
+  const ensureSimulationBreakdown = (mode: string, raw: string): string => {
+    const causeFallback: Record<string, string> = {
+      'high-load':
+        'Why it happens: Demand spikes from live events and peak-hour usage can overload major routes.',
+      'packet-loss':
+        'Why it happens: Weak signal and noisy or congested links can drop small pieces of data, so they are re-sent.',
+      'cable-cut':
+        'Why it happens: Ship anchors and undersea earthquakes can physically damage a cable route.',
+      normal:
+        'Why it happens: Demand stays steady and routes remain healthy, so traffic stays balanced.',
+    };
+    const impactFallback: Record<string, string> = {
+      'high-load':
+        'User impact: Streaming buffers more often and apps may respond slower.',
+      'packet-loss':
+        'User impact: Calls may stutter, games can lag, and loading may feel unstable.',
+      'cable-cut':
+        'User impact: Traffic reroutes to longer paths, which can raise latency in affected regions.',
+      normal:
+        'User impact: Most apps feel stable and responsive.',
+    };
+
+    const content = raw.trim();
+    const hasWhat = /what you see:/i.test(content);
+    const hasWhy = /why it happens:|cause/i.test(content);
+    const hasImpact = /user impact:|impact/i.test(content);
+
+    const whatLine = hasWhat ? content : `What you see: ${content}`;
+    const whyLine = hasWhy ? '' : causeFallback[mode] ?? '';
+    const impactLine = hasImpact ? '' : impactFallback[mode] ?? '';
+
+    return [whatLine, whyLine, impactLine].filter(Boolean).join('\n');
+  };
+
   try {
     const parsed = JSON.parse(trimmed) as Record<string, unknown>;
     if (parsed.type === 'journey' && typeof parsed.story === 'string') {
@@ -309,13 +383,28 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
       return { text: analogy ? `${content}\n\n${analogy}` : content, showGlobeHint: false };
     }
     if (parsed.type === 'scenario' && typeof parsed.story === 'string') {
-      return { text: parsed.story, showGlobeHint: true };
+      return {
+        text: ensureSimulationBreakdown(
+          typeof parsed.mode === 'string' ? parsed.mode : '',
+          parsed.story,
+        ),
+        showGlobeHint: true,
+      };
     }
     if (parsed.type === 'fact' && typeof parsed.content === 'string') {
       const emoji = typeof parsed.emoji === 'string' ? parsed.emoji : '';
       return { text: `${emoji} ${parsed.content}`.trim(), showGlobeHint: false };
     }
     if (parsed.type === 'action' && typeof parsed.message === 'string') {
+      if (
+        parsed.action === 'SET_MODE' &&
+        typeof parsed.payload === 'string'
+      ) {
+        return {
+          text: ensureSimulationBreakdown(parsed.payload, parsed.message),
+          showGlobeHint: true,
+        };
+      }
       return { text: parsed.message, showGlobeHint: true };
     }
   } catch {

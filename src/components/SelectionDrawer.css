@@ -53,9 +53,29 @@
   gap: 8px;
 }
 
+.drawer-route-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .drawer-city-flag {
   font-size: 28px;
   line-height: 1;
+}
+
+.drawer-country-code {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+  background: color-mix(in srgb, var(--amber) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
+  border-radius: 999px;
+  padding: 1px 6px;
+  line-height: 1.4;
 }
 
 .drawer-back {

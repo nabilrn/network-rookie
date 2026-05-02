@@ -32,6 +32,54 @@
   flex-wrap: wrap;
 }
 
+.sim-mode-guide {
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  border-radius: 8px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sim-mode-guide--normal {
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+
+.sim-mode-guide--warn {
+  border-color: rgba(245, 158, 11, 0.62);
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.sim-mode-guide--loss {
+  border-color: rgba(59, 130, 246, 0.62);
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.sim-mode-guide--danger {
+  border-color: rgba(239, 68, 68, 0.62);
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.sim-mode-guide-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-bright);
+}
+
+.sim-mode-guide-detail {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.sim-mode-guide-detail strong {
+  color: var(--text-bright);
+}
+
 .sim-chip {
   font-family: var(--mono);
   font-size: 11px;
