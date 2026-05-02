@@ -1,0 +1,52 @@
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--offline-border);
+  animation: bannerSlideDown 0.3s ease-out;
+}
+
+.offline-banner.dark {
+  background: var(--offline-bg-dark);
+  color: var(--offline-text-dark);
+}
+
+.offline-banner.light {
+  background: var(--offline-bg-light);
+  color: var(--offline-text-light);
+}
+
+@keyframes bannerSlideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.offline-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.offline-icon {
+  flex-shrink: 0;
+}
+
+.offline-text {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  font-weight: 500;
+}

@@ -1,0 +1,89 @@
+.sim-toolbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  min-height: 56px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 12px 20px;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.sim-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.sim-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.sim-btn {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 7px 14px;
+  border: 1px solid var(--amber);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--amber);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  user-select: none;
+}
+
+.sim-btn:hover {
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  transform: translateY(-1px);
+}
+
+.sim-btn:active {
+  transform: translateY(0);
+}
+
+.sim-btn.active {
+  background: var(--amber);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.sim-btn.active:hover {
+  background: var(--amber);
+}
+
+.sim-toolbar-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sim-mode-banner {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  padding: 8px 0 4px;
+  line-height: 1.5;
+  animation: bannerFadeIn 0.3s ease-out;
+}
+
+@keyframes bannerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

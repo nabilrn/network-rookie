@@ -1,0 +1,182 @@
+.globe-section {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--globe-bg);
+}
+
+.globe-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Globe hint overlay */
+.globe-hint {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--amber) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
+  padding: 10px 20px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 10;
+  animation: hintPulse 2s ease-in-out infinite;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes hintPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CITY INFO DIALOG (PREMIUM OVERLAY)
+   ═══════════════════════════════════════════════════════════ */
+
+.city-dialog {
+  position: absolute;
+  width: 320px;
+  max-width: calc(100% - 32px);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  border-radius: 16px;
+  padding: 24px;
+  z-index: 100;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.city-dialog--right {
+  animation: dialogSlideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.city-dialog--left {
+  animation: dialogSlideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dialogSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes dialogSlideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.city-dialog-flag {
+  font-size: 42px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.city-dialog-name {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.city-dialog-region {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-top: -4px;
+}
+
+.city-dialog-divider {
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--amber) 40%, transparent), transparent);
+  margin: 4px 0;
+}
+
+.city-dialog-tier {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--amber);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.city-dialog-fact {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.city-dialog-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-bright);
+  border: 1px solid color-mix(in srgb, var(--amber) 15%, transparent);
+}
+
+.stat-icon {
+  font-size: 16px;
+}
+
+.city-dialog-detail {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.city-dialog-close {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.city-dialog-close:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text-bright);
+  border-color: var(--border-strong);
+}

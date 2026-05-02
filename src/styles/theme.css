@@ -1,0 +1,364 @@
+@custom-variant dark (&:is(.dark *));
+
+/* ═══════════════════════════════════════════════════════════
+   NETWORK VISUALIZATION THEME — DARK MODE (DEFAULT)
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  /* Fonts */
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+
+  /* Base colors */
+  --bg: #09080d;
+  --surface: #100f15;
+  --dim: #161520;
+  --text: #a8b6c8;
+  --text-bright: #d8e0ec;
+  --muted: #364050;
+
+  /* Accent colors */
+  --amber: #e8a020;
+  --amber2: #f5c842;
+  --teal: #0cb8a2;
+  --steel: #5b8fd4;
+  --rose: #c97860;
+
+  /* Chrome UI */
+  --chrome-bg: #07060b;
+  --chrome-border: rgba(232, 160, 32, 0.07);
+  --traffic-red: #e05252;
+  --traffic-yellow: #e0a832;
+  --traffic-green: #4ac47a;
+
+  /* Borders & overlays */
+  --border: rgba(232, 160, 32, 0.1);
+  --border-light: rgba(232, 160, 32, 0.08);
+  --border-strong: rgba(232, 160, 32, 0.28);
+  --overlay: rgba(255, 255, 255, 0.03);
+  --overlay-hover: rgba(232, 160, 32, 0.03);
+
+  /* Globe */
+  --globe-bg: radial-gradient(ellipse at 40% 50%, #0a0f1e 0%, var(--bg) 70%);
+  --globe-atmosphere: #1a3060;
+  --globe-surface: #050810;
+  --globe-specular: #001128;
+  --globe-emissive: #000408;
+  --globe-country-cap: #0d1c36;
+  --globe-country-side: rgba(20, 70, 140, 0.12);
+  --globe-country-stroke: rgba(50, 120, 200, 0.42);
+
+  /* Footer */
+  --footer-bg: #06050a;
+  --footer-border: rgba(232, 160, 32, 0.06);
+  --footer-sep: rgba(255, 255, 255, 0.05);
+
+  /* Selection drawer */
+  --drawer-bg: #100f15;
+
+  /* OSI Card active state */
+  --card-active-bg: color-mix(in srgb, var(--amber) 4%, transparent);
+  --card-active-shadow: 0 0 20px rgba(232, 160, 32, 0.12), inset 0 0 15px rgba(232, 160, 32, 0.08);
+
+  /* Chat interface */
+  --user-bubble-bg: var(--steel);
+  --user-bubble-text: #ffffff;
+  --ai-message-text: var(--text);
+  --chat-input-bg: var(--dim);
+  --chat-input-border: var(--border-light);
+  --chip-bg: var(--dim);
+  --chip-text: var(--text);
+  --chip-hover-bg: rgba(232, 160, 32, 0.08);
+
+  /* HUD */
+  --hud-title: var(--text-bright);
+  --hud-label: var(--muted);
+  --hud-text: var(--text);
+  --hud-card-bg: color-mix(in srgb, var(--bg) 85%, transparent);
+
+  /* Inactivity overlay */
+  --inactivity-label: var(--muted);
+
+  /* Chat error */
+  --chat-error-bg: rgba(192, 38, 38, 0.15);
+  --chat-error-border: rgba(192, 38, 38, 0.4);
+  --chat-error-text: #ef4444;
+
+  /* Skeleton loading */
+  --skeleton-base: rgba(232, 160, 32, 0.1);
+  --skeleton-shimmer: rgba(232, 160, 32, 0.2);
+
+  /* Offline banner */
+  --offline-bg-dark: rgba(127, 29, 29, 0.95);
+  --offline-text-dark: #fca5a5;
+  --offline-border: rgba(239, 68, 68, 0.3);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT MODE THEME
+   ═══════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  /* Base colors */
+  --bg: #f0f2f5;
+  --surface: #ffffff;
+  --dim: #e5e8ec;
+  --text: #1f2937;
+  --text-bright: #0f172a;
+  --muted: #64748b;
+
+  /* Accent colors — higher saturation for light backgrounds */
+  --amber: #ea8c0d;
+  --amber2: #f59e0b;
+  --teal: #0d9488;
+  --steel: #3b82f6;
+  --rose: #e11d48;
+
+  /* Chrome UI */
+  --chrome-bg: #fafbfc;
+  --chrome-border: rgba(0, 0, 0, 0.08);
+  --traffic-red: #ff5f56;
+  --traffic-yellow: #ffbd2e;
+  --traffic-green: #27c93f;
+
+  /* Borders & overlays */
+  --border: rgba(0, 0, 0, 0.1);
+  --border-light: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(234, 140, 13, 0.3);
+  --overlay: rgba(0, 0, 0, 0.02);
+  --overlay-hover: rgba(234, 140, 13, 0.06);
+
+  /* Globe */
+  --globe-bg: radial-gradient(ellipse at 40% 50%, #dbeafe 0%, var(--bg) 70%);
+  --globe-atmosphere: #93c5fd;
+  --globe-surface: #bfdbfe;
+  --globe-specular: #dbeafe;
+  --globe-emissive: #f0f9ff;
+  --globe-country-cap: #60a5fa;
+  --globe-country-side: rgba(147, 197, 253, 0.2);
+  --globe-country-stroke: rgba(37, 99, 235, 0.65);
+
+  /* Footer */
+  --footer-bg: #fafbfc;
+  --footer-border: rgba(0, 0, 0, 0.08);
+  --footer-sep: rgba(0, 0, 0, 0.08);
+
+  /* Selection drawer */
+  --drawer-bg: #f5f6f8;
+
+  /* OSI Card active state */
+  --card-active-bg: #fef3e8;
+  --card-active-shadow: 0 0 20px rgba(234, 140, 13, 0.15), inset 0 0 15px rgba(234, 140, 13, 0.1);
+
+  /* Chat interface */
+  --user-bubble-bg: var(--steel);
+  --user-bubble-text: #ffffff;
+  --ai-message-text: #1f2937;
+  --chat-input-bg: #ffffff;
+  --chat-input-border: #e5e7eb;
+  --chip-bg: #ffffff;
+  --chip-text: #1f2937;
+  --chip-hover-bg: #fef3e8;
+
+  /* HUD */
+  --hud-title: #0f172a;
+  --hud-label: #64748b;
+  --hud-text: #1f2937;
+  --hud-card-bg: rgba(255, 255, 255, 0.85);
+
+  /* Inactivity overlay */
+  --inactivity-label: #64748b;
+
+  /* Chat error */
+  --chat-error-bg: rgba(239, 68, 68, 0.1);
+  --chat-error-border: rgba(239, 68, 68, 0.3);
+  --chat-error-text: #dc2626;
+
+  /* Skeleton loading */
+  --skeleton-base: rgba(234, 140, 13, 0.08);
+  --skeleton-shimmer: rgba(234, 140, 13, 0.18);
+
+  /* Offline banner */
+  --offline-bg-light: rgba(251, 191, 36, 0.95);
+  --offline-text-light: #78350f;
+  --offline-border: rgba(234, 140, 13, 0.3);
+}
+
+/* Figma Make Original Theme Variables */
+:root.figma-make {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /**
+  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
+  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
+  */
+
+  html {
+    font-size: var(--font-size);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  button {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  input {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+}

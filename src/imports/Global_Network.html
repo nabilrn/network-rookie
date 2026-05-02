@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How the Global Network Actually Works | network.folio/globe</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+<script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #09080d;
+  --surface: #100f15;
+  --dim:     #161520;
+  --amber:   #e8a020;
+  --amber2:  #f5c842;
+  --teal:    #0cb8a2;
+  --steel:   #5b8fd4;
+  --rose:    #c97860;
+  --text:    #a8b6c8;
+  --muted:   #364050;
+  --border:  rgba(232,160,32,0.1);
+  --mono:    'JetBrains Mono', monospace;
+  --sans:    'Space Grotesk', sans-serif;
+}
+html, body {
+  height: 100%; overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+/* ── BROWSER CHROME ────────────────────────────────────────── */
+.browser-bar {
+  height: 38px;
+  background: #07060b;
+  border-bottom: 1px solid rgba(232,160,32,0.07);
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  user-select: none;
+}
+.traffic-lights { display: flex; gap: 6px; align-items: center; }
+.tl { width: 11px; height: 11px; border-radius: 50%; }
+.tl.r { background: #e05252; }
+.tl.y { background: #e0a832; }
+.tl.g { background: #4ac47a; }
+.nav-btns { display: flex; gap: 3px; }
+.nav-btn {
+  width: 22px; height: 22px; border-radius: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 11px; cursor: default;
+}
+.browser-tabs { display: flex; gap: 1px; }
+.tab {
+  font-family: var(--mono); font-size: 10px;
+  padding: 5px 12px; border-radius: 5px 5px 0 0;
+  border: 1px solid rgba(232,160,32,0.08); border-bottom: none;
+  color: var(--muted); cursor: default;
+}
+.tab.active { color: var(--amber); background: rgba(232,160,32,0.05); }
+.url-bar {
+  flex: 1; max-width: 440px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(232,160,32,0.1);
+  border-radius: 5px; padding: 4px 12px;
+  font-family: var(--mono); font-size: 11px;
+  display: flex; align-items: center; gap: 7px;
+}
+.url-lock { color: var(--teal); font-size: 10px; }
+.url-host { color: var(--muted); }
+.url-path { color: var(--amber); }
+
+/* ── LAYOUT ────────────────────────────────────────────────── */
+.workspace {
+  display: flex;
+  height: calc(100vh - 38px - 42px);
+}
+.globe-section {
+  flex: 1; position: relative; overflow: hidden;
+  background: radial-gradient(ellipse at 40% 50%, #0a0f1e 0%, var(--bg) 70%);
+}
+#globeViz { width: 100%; height: 100%; }
+
+/* ── HUD ───────────────────────────────────────────────────── */
+.hud { position: absolute; inset: 0; pointer-events: none; }
+.hud-corner {
+  position: absolute; width: 14px; height: 14px;
+  border-color: var(--amber); border-style: solid; opacity: 0.3;
+}
+.hud-corner.tl { top:10px; left:10px;  border-width:1.5px 0 0 1.5px; }
+.hud-corner.tr { top:10px; right:10px; border-width:1.5px 1.5px 0 0; }
+.hud-corner.bl { bottom:10px; left:10px;  border-width:0 0 1.5px 1.5px; }
+.hud-corner.br { bottom:10px; right:10px; border-width:0 1.5px 1.5px 0; }
+
+.hud-title {
+  position: absolute; top: 22px; left: 22px;
+}
+.hud-title h1 {
+  font-size: 17px; font-weight: 700;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: #fff; line-height: 1.25;
+  text-shadow: 0 0 24px rgba(232,160,32,0.35);
+}
+.hud-title .sub {
+  font-family: var(--mono); font-size: 9.5px;
+  color: var(--amber); opacity: 0.55;
+  letter-spacing: 0.18em; margin-top: 5px;
+}
+
+.hud-stats {
+  position: absolute; bottom: 22px; left: 22px;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.stat-row {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em;
+}
+.s-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  animation: blink 2.4s ease-in-out infinite;
+}
+.s-dot.a { background: var(--amber);  box-shadow: 0 0 5px var(--amber); }
+.s-dot.t { background: var(--teal);   box-shadow: 0 0 5px var(--teal);  animation-delay:.7s; }
+.s-dot.s { background: var(--steel);  box-shadow: 0 0 5px var(--steel); animation-delay:1.4s; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+.s-label { color: var(--muted); }
+.s-val   { color: var(--text); font-weight: 500; }
+.s-val.a { color: var(--amber); }
+.s-val.t { color: var(--teal); }
+.s-val.s { color: var(--steel); }
+
+.hud-mini {
+  position: absolute; top: 22px; right: 8px;
+  display: flex; flex-direction: column; gap: 5px;
+  align-items: flex-end;
+}
+.mini-card {
+  background: rgba(9,8,13,0.85);
+  border: 1px solid rgba(232,160,32,0.1);
+  border-radius: 5px; padding: 6px 10px;
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.09em; color: var(--muted);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.mini-card .val {
+  color: var(--amber); font-size: 13px; font-weight: 600;
+  font-family: var(--mono);
+}
+.mini-sparkline {
+  display: flex; align-items: flex-end;
+  gap: 2px; height: 20px; margin-top: 3px;
+}
+.spark-bar {
+  width: 4px; border-radius: 1px;
+  background: var(--amber); opacity: 0.5;
+  animation: spark 3s ease-in-out infinite;
+}
+@keyframes spark { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(.3)} }
+
+.scan-line {
+  position: absolute; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(232,160,32,0.12) 50%, transparent 100%);
+  animation: scan 10s linear infinite;
+}
+@keyframes scan { 0%{top:0} 100%{top:100%} }
+
+/* ── TOOLTIP ────────────────────────────────────────────────── */
+.node-tip {
+  position: absolute;
+  background: rgba(9,8,13,0.95);
+  border: 1px solid rgba(232,160,32,0.25);
+  border-radius: 5px; padding: 7px 11px;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--amber); letter-spacing: 0.07em;
+  pointer-events: none; display: none;
+  transform: translate(-50%, -130%);
+  white-space: nowrap; z-index: 20;
+}
+.node-tip.on { display: block; }
+.node-tip .sub2 { color: var(--muted); font-size: 9px; margin-top: 2px; }
+
+/* ── RIGHT PANEL ────────────────────────────────────────────── */
+.panel-section {
+  width: 348px; flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid rgba(232,160,32,0.08);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.panel-header {
+  padding: 18px 18px 13px;
+  border-bottom: 1px solid rgba(232,160,32,0.07);
+  flex-shrink: 0;
+}
+.panel-eye {
+  font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.22em; color: var(--amber);
+  opacity: 0.55; margin-bottom: 5px;
+  text-transform: uppercase;
+}
+.panel-title {
+  font-size: 12.5px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: #d8e0ec; line-height: 1.45;
+}
+.panel-title span { color: var(--muted); font-size: 11px; font-weight: 400; }
+
+.panel-cards {
+  flex: 1; overflow-y: auto; padding: 11px 14px;
+  display: flex; flex-direction: column; gap: 7px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(232,160,32,0.12) transparent;
+}
+.panel-cards::-webkit-scrollbar { width: 3px; }
+.panel-cards::-webkit-scrollbar-thumb { background: rgba(232,160,32,0.12); border-radius: 2px; }
+
+/* ── CARDS ──────────────────────────────────────────────────── */
+.card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 7px; padding: 11px 13px;
+  display: flex; align-items: flex-start; gap: 11px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, transform .18s;
+  position: relative; overflow: hidden;
+}
+.card::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 2px; border-radius: 2px;
+}
+.ca::before { background: var(--amber); }
+.ct::before { background: var(--teal); }
+.cs::before { background: var(--steel); }
+.cr::before { background: var(--rose); }
+.ca2::before { background: var(--amber2); }
+.ct2::before { background: var(--teal); opacity: .6; }
+.card:hover {
+  border-color: rgba(232,160,32,0.2);
+  background: rgba(232,160,32,0.03);
+  transform: translateX(2px);
+}
+.card.active {
+  border-color: rgba(232,160,32,0.28);
+  background: rgba(232,160,32,0.04);
+}
+.card-icon { width: 34px; height: 34px; flex-shrink: 0; margin-top: 1px; }
+.card-body { flex: 1; min-width: 0; }
+.card-num {
+  font-family: var(--mono); font-size: 9px;
+  color: var(--muted); letter-spacing: 0.15em; margin-bottom: 3px;
+}
+.card-title {
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: #d0dce8; line-height: 1.3; margin-bottom: 4px;
+}
+.card-title span { color: var(--muted); font-size: 10px; font-weight: 400; }
+.card-text {
+  font-family: var(--mono); font-size: 9.5px;
+  color: var(--muted); line-height: 1.55;
+}
+.card-tag {
+  display: inline-block; margin-top: 5px;
+  font-family: var(--mono); font-size: 8.5px;
+  padding: 2px 6px; border-radius: 3px; letter-spacing: 0.09em;
+}
+.ca  .card-tag  { background: rgba(232,160,32,0.1); color: var(--amber); }
+.ct  .card-tag  { background: rgba(12,184,162,0.1); color: var(--teal); }
+.cs  .card-tag  { background: rgba(91,143,212,0.1); color: var(--steel); }
+.cr  .card-tag  { background: rgba(201,120,96,0.1); color: var(--rose); }
+.ca2 .card-tag  { background: rgba(245,200,66,0.1); color: var(--amber2); }
+.ct2 .card-tag  { background: rgba(12,184,162,0.08); color: var(--teal); }
+
+/* ── FOOTER ─────────────────────────────────────────────────── */
+footer {
+  height: 42px; background: #06050a;
+  border-top: 1px solid rgba(232,160,32,0.06);
+  display: flex; align-items: center; gap: 24px;
+  padding: 0 20px; flex-shrink: 0;
+}
+.fi {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--muted); letter-spacing: 0.1em;
+  opacity: 0.65; cursor: default;
+  transition: opacity .2s, color .2s;
+}
+.fi:hover { opacity: 1; color: var(--amber); }
+.fi svg { width: 13px; height: 13px; }
+.fsep { width: 1px; height: 12px; background: rgba(255,255,255,0.05); }
+.fright { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--muted); letter-spacing: 0.1em; opacity: 0.4; }
+</style>
+</head>
+<body>
+
+<!-- Browser chrome -->
+<div class="browser-bar">
+  <div class="traffic-lights">
+    <div class="tl r"></div>
+    <div class="tl y"></div>
+    <div class="tl g"></div>
+  </div>
+  <div class="nav-btns">
+    <div class="nav-btn">&#8592;</div>
+    <div class="nav-btn">&#8594;</div>
+    <div class="nav-btn">&#8635;</div>
+  </div>
+  <div class="browser-tabs">
+    <div class="tab active">Globe Viz</div>
+    <div class="tab">Infra</div>
+    <div class="tab">Logs</div>
+  </div>
+  <div class="url-bar">
+    <span class="url-lock">🔒</span>
+    <span class="url-host">network.folio</span><span class="url-path">/globe</span>
+  </div>
+</div>
+
+<div class="workspace">
+
+  <!-- Globe -->
+  <div class="globe-section" id="globe-section">
+    <div id="globeViz"></div>
+
+    <div class="hud">
+      <div class="hud-corner tl"></div>
+      <div class="hud-corner tr"></div>
+      <div class="hud-corner bl"></div>
+      <div class="hud-corner br"></div>
+
+      <div class="hud-title">
+        <h1>GLOBAL NETWORK<br>VISUALIZER</h1>
+        <div class="sub">// INFRASTRUCTURE TOPOLOGY — LIVE SIM</div>
+      </div>
+
+      <div class="hud-stats">
+        <div class="stat-row">
+          <div class="s-dot a"></div>
+          <span class="s-label">ACTIVE STREAMS</span>
+          <span class="s-val a" id="stat-streams">12,847,203</span>
+          <span class="s-label">(SIMULATED)</span>
+        </div>
+        <div class="stat-row">
+          <div class="s-dot t"></div>
+          <span class="s-label">AVG LATENCY</span>
+          <span class="s-val t">&lt; 47ms</span>
+          <span class="s-label">(SIMULATED)</span>
+        </div>
+        <div class="stat-row">
+          <div class="s-dot s"></div>
+          <span class="s-label">PROXMOX CLUSTER</span>
+          <span class="s-val s">OPTIMAL</span>
+          <span class="s-label">(FAKE LOGS)</span>
+        </div>
+        <div class="stat-row">
+          <div class="s-dot a" style="animation-delay:1.8s"></div>
+          <span class="s-label">NODES ONLINE</span>
+          <span class="s-val">12 / 12</span>
+        </div>
+      </div>
+
+      <div class="hud-mini">
+        <div class="mini-card">
+          <div>THROUGHPUT / 30s</div>
+          <div class="mini-sparkline" id="sparkline"></div>
+        </div>
+        <div class="mini-card">
+          <div>PACKET LOSS</div>
+          <div class="val">0.003%</div>
+        </div>
+      </div>
+
+      <div class="scan-line"></div>
+    </div>
+
+    <div class="node-tip" id="node-tip">
+      <div id="tip-name">NYC</div>
+      <div class="sub2" id="tip-sub">40.7°N · 74.0°W</div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="panel-section">
+    <div class="panel-header">
+      <div class="panel-eye">// EDUCATIONAL OVERLAY v2.1</div>
+      <div class="panel-title">
+        UNDERSTANDING THE INTERNET<br>
+        <span>FOR LAYPEOPLE</span>
+      </div>
+    </div>
+    <div class="panel-cards">
+
+      <div class="card ca">
+        <svg class="card-icon" viewBox="0 0 34 34" fill="none">
+          <rect x="3" y="5"  width="28" height="5" rx="1" fill="rgba(232,160,32,.1)" stroke="#e8a020" stroke-width=".7"/>
+          <rect x="5" y="6.5" width="2.5" height="2" rx=".3" fill="#e8a020" opacity=".6"/>
+          <rect x="9" y="6.5" width="2.5" height="2" rx=".3" fill="#e8a020" opacity=".35"/>
+          <rect x="26" y="6.5" width="3" height="2" rx="1" fill="#0cb8a2"/>
+          <rect x="3" y="12" width="28" height="5" rx="1" fill="rgba(232,160,32,.07)" stroke="#e8a020" stroke-width=".7"/>
+          <rect x="5" y="13.5" width="2.5" height="2" rx=".3" fill="#e8a020" opacity=".6"/>
+          <rect x="9" y="13.5" width="2.5" height="2" rx=".3" fill="#e8a020" opacity=".35"/>
+          <rect x="26" y="13.5" width="3" height="2" rx="1" fill="#0cb8a2"/>
+          <rect x="3" y="19" width="28" height="5" rx="1" fill="rgba(232,160,32,.05)" stroke="#e8a020" stroke-width=".7"/>
+          <rect x="5" y="20.5" width="2.5" height="2" rx=".3" fill="#e8a020" opacity=".5"/>
+          <rect x="26" y="20.5" width="3" height="2" rx="1" fill="#c97860"/>
+          <rect x="12" y="26" width="10" height="1.5" rx=".5" fill="#e8a020" opacity=".15"/>
+        </svg>
+        <div class="card-body">
+          <div class="card-num">01 / 06</div>
+          <div class="card-title">COMPUTERS &amp; SERVERS <span>(THE ORIGIN)</span></div>
+          <div class="card-text">Billions of devices storing information, accessible over the network at any moment.</div>
+          <div class="card-tag">LAYER 0 — HARDWARE</div>
+        </div>
+      </div>
+
+      <div class="card ct">
+        <svg class="card-icon" viewBox="0 0 34 34" fill="none">
+          <rect x="5" y="13" width="24" height="16" rx="1.5" fill="rgba(12,184,162,.08)" stroke="#0cb8a2" stroke-width=".7"/>
+          <rect x="8" y="16" width="4" height="6" rx=".5" fill="#0cb8a2" opacity=".45"/>
+          <rect x="13" y="16" width="4" height="6" rx=".5" fill="#0cb8a2" opacity=".35"/>
+          <rect x="18" y="16" width="4" height="6" rx=".5" fill="#0cb8a2" opacity=".25"/>
+          <rect x="23" y="16" width="4" height="6" rx=".5" fill="#0cb8a2" opacity=".45"/>
+          <rect x="8"  y="24" width="4" height="3" rx=".5" fill="#0cb8a2" opacity=".3"/>
+          <rect x="13" y="24" width="4" height="3" rx=".5" fill="#0cb8a2" opacity=".25"/>
+          <rect x="18" y="24" width="4" height="3" rx=".5" fill="#0cb8a2" opacity=".3"/>
+          <rect x="23" y="24" width="4" height="3" rx=".5" fill="#e8a020" opacity=".5"/>
+          <path d="M3 13 L9 7 L25 7 L31 13" stroke="#0cb8a2" stroke-width=".7" fill="none" opacity=".5"/>
+          <line x1="17" y1="7" x2="17" y2="13" stroke="#0cb8a2" stroke-width=".5" opacity=".35"/>
+        </svg>
+        <div class="card-body">
+          <div class="card-num">02 / 06</div>
+          <div class="card-title">DATA CENTERS <span>(DIGITAL CITIES)</span></div>
+          <div class="card-text">Massive climate-controlled facilities housing thousands of interconnected servers.</div>
+          <div class="card-tag">LAYER 1 — INFRASTRUCTURE</div>
+        </div>
+      </div>
+
+      <div class="card cs">
+        <svg class="card-icon" viewBox="0 0 34 34" fill="none">
+          <rect x="3"  y="17" width="8" height="10" rx="1" fill="rgba(91,143,212,.1)" stroke="#5b8fd4" stroke-width=".7"/>
+          <rect x="4.5" y="18.5" width="5" height="1.5" rx=".3" fill="#5b8fd4" opacity=".5"/>
+          <rect x="4.5" y="21"   width="5" height="1.5" rx=".3" fill="#5b8fd4" opacity=".3"/>
+          <rect x="13" y="12" width="8" height="10" rx="1" fill="rgba(91,143,212,.1)" stroke="#5b8fd4" stroke-width=".7"/>
+          <rect x="14.5" y="13.5" width="5" height="1.5" rx=".3" fill="#5b8fd4" opacity=".5"/>
+          <rect x="14.5" y="16"   width="5" height="1.5" rx=".3" fill="#5b8fd4" opacity=".3"/>
+          <rect x="23" y="7" width="8" height="10" rx="1" fill="rgba(91,143,212,.22)" stroke="#5b8fd4" stroke-width="1"/>
+          <rect x="24.5" y="8.5" width="5" height="1.5" rx=".3" fill="#5b8fd4" opacity=".7"/>
+          <rect x="24.5" y="11"   width="5" height="1.5" rx=".3" fill="#5b8fd4" opacity=".5"/>
+          <path d="M7 17 L13 12" stroke="#5b8fd4" stroke-width=".7" stroke-dasharray="2,1.5" opacity=".4"/>
+          <path d="M17 12 L23 7"  stroke="#5b8fd4" stroke-width=".7" stroke-dasharray="2,1.5" opacity=".4"/>
+        </svg>
+        <div class="card-body">
+          <div class="card-num">03 / 06</div>
+          <div class="card-title">DATA PACKETS <span>(THE ENVELOPES)</span></div>
+          <div class="card-text">Information broken into tiny labeled chunks, each routed independently through the network.</div>
+          <div class="card-tag">LAYER 2 — TRANSPORT</div>
+        </div>
+      </div>
+
+      <div class="card cr">
+        <svg class="card-icon" viewBox="0 0 34 34" fill="none">
+          <path d="M3 19 Q9 11 17 19 Q25 27 31 19" stroke="#c97860" stroke-width="1.1" fill="none"/>
+          <path d="M3 23 Q9 15 17 23 Q25 31 31 23" stroke="#c97860" stroke-width=".5" fill="none" opacity=".3"/>
+          <circle cx="7"  cy="19" r="2" fill="#c97860" opacity=".7"/>
+          <circle cx="17" cy="19" r="2" fill="#c97860" opacity=".7"/>
+          <circle cx="27" cy="19" r="2" fill="#c97860" opacity=".7"/>
+          <path d="M5 27 L5 25 M9 29 L9 26 M13 29 L13 27 M17 28 L17 26 M21 29 L21 26 M25 29 L25 26 M29 27 L29 25" stroke="#c97860" stroke-width=".7" opacity=".25"/>
+          <ellipse cx="17" cy="28" rx="13" ry="3.5" fill="rgba(201,120,96,.04)" stroke="#c97860" stroke-width=".4" opacity=".2"/>
+        </svg>
+        <div class="card-body">
+          <div class="card-num">04 / 06</div>
+          <div class="card-title">SUBMARINE CABLES <span>(INFORMATION HIGHWAYS)</span></div>
+          <div class="card-text">Undersea optical fibers spanning oceans, transmitting data at the speed of light.</div>
+          <div class="card-tag">LAYER 3 — PHYSICAL</div>
+        </div>
+      </div>
+
+      <div class="card ca2">
+        <svg class="card-icon" viewBox="0 0 34 34" fill="none">
+          <circle cx="17" cy="17" r="5.5" fill="rgba(245,200,66,.1)" stroke="#f5c842" stroke-width=".9"/>
+          <circle cx="17" cy="17" r="2"   fill="#f5c842"/>
+          <line x1="17" y1="3"  x2="17" y2="11.5" stroke="#f5c842" stroke-width=".9" stroke-dasharray="2,1" opacity=".5"/>
+          <line x1="17" y1="22.5" x2="17" y2="31" stroke="#f5c842" stroke-width=".9" stroke-dasharray="2,1" opacity=".5"/>
+          <line x1="3"  y1="17" x2="11.5" y2="17" stroke="#f5c842" stroke-width=".9" stroke-dasharray="2,1" opacity=".5"/>
+          <line x1="22.5" y1="17" x2="31" y2="17" stroke="#f5c842" stroke-width=".9" stroke-dasharray="2,1" opacity=".5"/>
+          <circle cx="17" cy="3"  r="1.8" fill="#f5c842" opacity=".5"/>
+          <circle cx="17" cy="31" r="1.8" fill="#f5c842" opacity=".5"/>
+          <circle cx="3"  cy="17" r="1.8" fill="#f5c842" opacity=".5"/>
+          <circle cx="31" cy="17" r="1.8" fill="#f5c842" opacity=".5"/>
+          <circle cx="17" cy="3"  r=".8" fill="#0cb8a2"/>
+          <circle cx="31" cy="17" r=".8" fill="#0cb8a2"/>
+        </svg>
+        <div class="card-body">
+          <div class="card-num">05 / 06</div>
+          <div class="card-title">ROUTERS <span>(THE DATA GPS)</span></div>
+          <div class="card-text">Intelligent devices that analyze packet headers and choose the optimal path through the mesh.</div>
+          <div class="card-tag">LAYER 4 — ROUTING</div>
+        </div>
+      </div>
+
+      <div class="card ct2">
+        <svg class="card-icon" viewBox="0 0 34 34" fill="none">
+          <rect x="6" y="5"  width="22" height="24" rx="1.5" fill="rgba(12,184,162,.08)" stroke="#0cb8a2" stroke-width=".7"/>
+          <rect x="9" y="9"  width="16" height="2"   rx=".4" fill="#0cb8a2" opacity=".45"/>
+          <rect x="9" y="13" width="12" height="1.5" rx=".4" fill="#0cb8a2" opacity=".25"/>
+          <rect x="9" y="16" width="14" height="1.5" rx=".4" fill="#0cb8a2" opacity=".25"/>
+          <rect x="9" y="19" width="9"  height="1.5" rx=".4" fill="#0cb8a2" opacity=".25"/>
+          <circle cx="24" cy="24" r="6" fill="#09080d" stroke="#0cb8a2" stroke-width="1.1"/>
+          <path d="M21 24 L23 26 L27 21" stroke="#0cb8a2" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="card-body">
+          <div class="card-num">06 / 06</div>
+          <div class="card-title">REASSEMBLY <span>(THE COMPLETION)</span></div>
+          <div class="card-text">All packets arrive and merge at the destination, reconstructing the original file or webpage.</div>
+          <div class="card-tag">LAYER 5 — APPLICATION</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="fi">
+    <svg viewBox="0 0 13 13" fill="none">
+      <circle cx="6.5" cy="6.5" r="2.5" stroke="#61DAFB" stroke-width=".9"/>
+      <ellipse cx="6.5" cy="6.5" rx="6" ry="2.2" stroke="#61DAFB" stroke-width=".7"/>
+      <ellipse cx="6.5" cy="6.5" rx="6" ry="2.2" stroke="#61DAFB" stroke-width=".7" transform="rotate(60 6.5 6.5)"/>
+      <ellipse cx="6.5" cy="6.5" rx="6" ry="2.2" stroke="#61DAFB" stroke-width=".7" transform="rotate(120 6.5 6.5)"/>
+    </svg>
+    React
+  </div>
+  <div class="fsep"></div>
+  <div class="fi">
+    <svg viewBox="0 0 13 13" fill="none">
+      <path d="M1 9.5 L6.5 1.5 L12 9.5 L6.5 12 Z" stroke="#2496ED" stroke-width=".7" fill="rgba(36,150,237,.1)"/>
+      <path d="M3.5 8 L6.5 4 L9.5 8 Z" fill="#2496ED" opacity=".5"/>
+    </svg>
+    Docker
+  </div>
+  <div class="fsep"></div>
+  <div class="fi">
+    <svg viewBox="0 0 13 13" fill="none">
+      <path d="M2 9 L6.5 1.5 L11 9" stroke="rgba(255,255,255,.5)" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+      <line x1="3.5" y1="7" x2="9.5" y2="7" stroke="rgba(255,255,255,.25)" stroke-width=".8"/>
+    </svg>
+    Fastify
+  </div>
+  <div class="fsep"></div>
+  <div class="fi">
+    <svg viewBox="0 0 13 13" fill="none">
+      <rect x="1" y="1" width="11" height="11" rx="2" fill="rgba(226,100,42,.12)" stroke="#e2642a" stroke-width=".7"/>
+      <text x="6.5" y="9.5" text-anchor="middle" fill="#e2642a" font-size="6.5" font-weight="700" font-family="monospace">PX</text>
+    </svg>
+    Proxmox
+  </div>
+  <div class="fsep"></div>
+  <div class="fi">
+    <svg viewBox="0 0 13 13" fill="none">
+      <path d="M6.5 0.5C3.2 0.5 0.5 3.2 0.5 6.5C0.5 9.2 2.2 11.5 4.6 12.4C4.9 12.45 5 12.25 5 12.1V11C3.3 11.4 2.9 10.2 2.9 10.2C2.6 9.5 2.2 9.2 2.2 9.2C1.6 8.8 2.25 8.8 2.25 8.8C2.9 8.85 3.25 9.5 3.25 9.5C3.85 10.5 4.8 10.2 5.1 10C5.15 9.6 5.3 9.3 5.45 9.15C3.8 8.98 2.1 8.33 2.1 5.6C2.1 4.8 2.35 4.15 2.85 3.65C2.75 3.45 2.5 2.7 2.95 1.7C2.95 1.7 3.55 1.5 5 2.45C5.6 2.3 6.25 2.2 6.5 2.2C6.75 2.2 7.4 2.3 8 2.45C9.45 1.5 10.05 1.7 10.05 1.7C10.5 2.7 10.25 3.45 10.15 3.65C10.65 4.15 10.9 4.8 10.9 5.6C10.9 8.35 9.2 8.97 7.55 9.15C7.8 9.35 8 9.8 8 10.45V12.1C8 12.25 8.1 12.45 8.4 12.4C10.8 11.5 12.5 9.2 12.5 6.5C12.5 3.2 9.8 0.5 6.5 0.5Z" fill="currentColor" opacity=".65"/>
+    </svg>
+    GitHub
+  </div>
+  <div class="fright">PORTFOLIO © 2025</div>
+</footer>
+
+<script>
+// ── Sparkline bars
+const sparkEl = document.getElementById('sparkline');
+[55,72,40,85,62,90,48,78,55,68,82,45,70,60,88,52,74,66,80,58].forEach((h, i) => {
+  const b = document.createElement('div');
+  b.className = 'spark-bar';
+  b.style.height = h + '%';
+  b.style.animationDelay = (i * 0.12) + 's';
+  b.style.animationDuration = (2.2 + (i % 3) * 0.6) + 's';
+  b.style.opacity = (0.25 + h/220);
+  if (i % 3 === 1) b.style.background = 'var(--teal)';
+  else if (i % 3 === 2) b.style.background = 'var(--steel)';
+  sparkEl.appendChild(b);
+});
+
+// ── Counter animation
+const streamEl = document.getElementById('stat-streams');
+let streamN = 12847203;
+setInterval(() => {
+  streamN += Math.floor(Math.random() * 1200) - 500;
+  streamEl.textContent = streamN.toLocaleString();
+}, 900);
+
+// ── Card interactions
+document.querySelectorAll('.card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+    card.classList.toggle('active');
+  });
+});
+
+// ── GLOBE.GL SETUP ──────────────────────────────────────────
+const CITIES = [
+  { name:'New York',      code:'NYC', lat:40.71, lng:-74.01, load:'98%' },
+  { name:'London',        code:'LHR', lat:51.51, lng:-0.12,  load:'94%' },
+  { name:'Tokyo',         code:'TYO', lat:35.68, lng:139.69, load:'99%' },
+  { name:'Singapore',     code:'SIN', lat:1.35,  lng:103.82, load:'96%' },
+  { name:'São Paulo',     code:'GRU', lat:-23.55,lng:-46.63, load:'87%' },
+  { name:'Mumbai',        code:'BOM', lat:19.08, lng:72.88,  load:'91%' },
+  { name:'Sydney',        code:'SYD', lat:-33.87,lng:151.21, load:'88%' },
+  { name:'Cape Town',     code:'CPT', lat:-33.92,lng:18.42,  load:'79%' },
+  { name:'Paris',         code:'CDG', lat:48.85, lng:2.35,   load:'93%' },
+  { name:'Moscow',        code:'SVO', lat:55.75, lng:37.62,  load:'85%' },
+  { name:'Beijing',       code:'PEK', lat:39.91, lng:116.39, load:'97%' },
+  { name:'San Francisco', code:'SFO', lat:37.77, lng:-122.42,load:'96%' },
+];
+
+const CONNS = [
+  [0,1,'amber'],[0,8,'amber'],[0,11,'amber'],[0,4,'steel'],
+  [1,8,'amber'],[1,9,'teal'], [1,5,'steel'],
+  [2,3,'teal'], [2,10,'teal'],[2,6,'amber'],
+  [3,5,'teal'], [3,6,'steel'],
+  [4,7,'steel'],
+  [5,9,'teal'],
+  [8,9,'amber'],
+  [10,9,'steel'],[11,2,'teal'],
+];
+
+const ARC_COLORS = {
+  amber: '#e8a020',
+  teal:  '#0cb8a2',
+  steel: '#5b8fd4',
+};
+
+const arcsData = CONNS.map(([i, j, col]) => ({
+  startLat: CITIES[i].lat, startLng: CITIES[i].lng,
+  endLat:   CITIES[j].lat, endLng:   CITIES[j].lng,
+  color: ARC_COLORS[col],
+}));
+
+const section = document.getElementById('globe-section');
+const W = section.clientWidth;
+const H = section.clientHeight;
+
+const globe = Globe()(document.getElementById('globeViz'))
+  .width(W)
+  .height(H)
+  .backgroundColor('rgba(0,0,0,0)')
+  .atmosphereColor('#1a3060')
+  .atmosphereAltitude(0.18)
+  // Points / cities
+  .pointsData(CITIES)
+  .pointLat('lat')
+  .pointLng('lng')
+  .pointColor(() => '#e8a020')
+  .pointAltitude(0.008)
+  .pointRadius(0.42)
+  .pointLabel(d => `
+    <div style="font-family:JetBrains Mono,monospace;font-size:11px;
+      background:rgba(9,8,13,.95);border:1px solid rgba(232,160,32,.3);
+      padding:6px 10px;border-radius:5px;color:#e8a020;white-space:nowrap;">
+      ${d.code} — ${d.name}<br>
+      <span style="color:#364050;font-size:9px">${d.lat.toFixed(2)}° / ${d.lng.toFixed(2)}° · LOAD ${d.load}</span>
+    </div>
+  `)
+  // Arcs / streams
+  .arcsData(arcsData)
+  .arcStartLat('startLat')
+  .arcStartLng('startLng')
+  .arcEndLat('endLat')
+  .arcEndLng('endLng')
+  .arcColor('color')
+  .arcAltitude(0.28)
+  .arcStroke(0.5)
+  .arcDashLength(0.25)
+  .arcDashGap(0.75)
+  .arcDashAnimateTime(d => 1800 + Math.random() * 1200)
+  .arcsTransitionDuration(0)
+  // Countries
+  .polygonsData([])
+  .polygonCapColor(() => '#0d1c36')
+  .polygonSideColor(() => 'rgba(20,70,140,.12)')
+  .polygonStrokeColor(() => 'rgba(50,120,200,.42)')
+  .polygonAltitude(0.004);
+
+// ── Style the globe surface
+globe.globeMaterial().color.set('#050810');
+globe.globeMaterial().specular.set('#001128');
+globe.globeMaterial().shininess = 12;
+globe.globeMaterial().emissive.set('#000408');
+globe.globeMaterial().emissiveIntensity = 0.4;
+
+// ── Auto-rotate
+globe.controls().autoRotate = true;
+globe.controls().autoRotateSpeed = 0.35;
+globe.controls().enableDamping = true;
+globe.controls().dampingFactor = 0.08;
+
+// ── Load country polygons
+fetch('https://unpkg.com/world-atlas@2/countries-110m.json')
+  .then(r => r.json())
+  .then(world => {
+    const countries = topojson.feature(world, world.objects.countries);
+    globe.polygonsData(countries.features);
+  })
+  .catch(() => {
+    // Fallback: no polygons, globe still shows with nodes + arcs
+    console.log('Country data unavailable; globe still functional.');
+  });
+
+// ── Resize
+window.addEventListener('resize', () => {
+  globe.width(section.clientWidth).height(section.clientHeight);
+});
+</script>
+</body>
+</html>
