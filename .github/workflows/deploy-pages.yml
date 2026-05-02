@@ -37,16 +37,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set Vite base path
-        run: |
-          if [[ "${{ github.event.repository.name }}" == *.github.io ]]; then
-            echo "VITE_BASE_PATH=/" >> "$GITHUB_ENV"
-          else
-            echo "VITE_BASE_PATH=/${{ github.event.repository.name }}/" >> "$GITHUB_ENV"
-          fi
-
       - name: Build app
-        run: pnpm run build -- --base="${VITE_BASE_PATH}"
+        run: pnpm run build -- --base=./
         env:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
           VITE_GEMINI_MODEL: ${{ secrets.VITE_GEMINI_MODEL }}
