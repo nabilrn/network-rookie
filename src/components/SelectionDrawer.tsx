@@ -1,6 +1,20 @@
 import { CITIES, CONNECTIONS } from '../data/network';
-import 'country-flag-icons/3x2/flags.css';
 import './SelectionDrawer.css';
+
+// Helper: flag image from flagcdn.com using ISO country code
+const flagImg = (countryCode: string, size: 'sm' | 'md' = 'sm') => {
+  const w = size === 'md' ? 36 : 24;
+  const h = size === 'md' ? 27 : 18;
+  return (
+    <img
+      src={`https://flagcdn.com/${w}x${h}/${countryCode.toLowerCase()}.png`}
+      width={w}
+      height={h}
+      alt={countryCode}
+      style={{ borderRadius: 2, verticalAlign: 'middle', boxShadow: '0 1px 3px rgba(0,0,0,.25)', display: 'inline-block' }}
+    />
+  );
+};
 
 interface SelectionDrawerProps {
   selectedCity: number | null;
@@ -60,20 +74,17 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
       },
     ];
 
-    const FromFlag = fromCity.countryCode;
-    const ToFlag = toCity.countryCode;
-
     return (
       <div className="selection-drawer state-c">
         <div className="drawer-header-row">
           <h3 className="drawer-header">
             <span className="drawer-route-flag">
-              <span className={`flag-icon flag-icon--${FromFlag.toLocaleLowerCase()}`} title={fromCity.name} />
+              {flagImg(fromCity.countryCode)}
               <span className="drawer-country-code">{fromCity.countryCode}</span>
             </span>
             {fromCity.name} →
             <span className="drawer-route-flag">
-              <span className={`flag-icon flag-icon--${ToFlag.toLocaleLowerCase()}`} title={toCity.name} />
+              {flagImg(toCity.countryCode)}
               <span className="drawer-country-code">{toCity.countryCode}</span>
             </span>
             {toCity.name}
@@ -107,13 +118,11 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
     return null;
   }
 
-  const CityFlag = city.countryCode;
-
   return (
     <div className="selection-drawer state-b">
         <div className="drawer-header-row">
           <h3 className="drawer-header drawer-city-header">
-            <span className={`flag-icon flag-icon--${CityFlag.toLocaleLowerCase()}`} title={city.name} />
+            {flagImg(city.countryCode, 'md')}
             <span className="drawer-country-code">{city.countryCode}</span>
             <span>{city.name}</span>
           </h3>

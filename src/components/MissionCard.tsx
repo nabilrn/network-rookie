@@ -19,10 +19,21 @@ export const MissionCard: React.FC<MissionCardProps> = ({
   const fromCity = CITIES.find(c => c.id === mission.fromId);
   const toCity = CITIES.find(c => c.id === mission.toId);
 
-  const fromFlag = fromCity?.flag || '🌐';
-  const toFlag = toCity?.flag || '🌐';
+  const fromCode = fromCity?.countryCode || '';
+  const toCode = toCity?.countryCode || '';
   const fromName = fromCity?.name || mission.fromId;
   const toName = toCity?.name || mission.toId;
+
+  const flagImg = (countryCode: string) =>
+    countryCode ? (
+      <img
+        src={`https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`}
+        width={24}
+        height={18}
+        alt={countryCode}
+        style={{ borderRadius: 2, verticalAlign: 'middle', boxShadow: '0 1px 3px rgba(0,0,0,.2)', display: 'inline-block' }}
+      />
+    ) : <span style={{ fontSize: 18 }}>🌐</span>;
 
   const statusColor = {
     inactive: '#64748b',
@@ -55,12 +66,12 @@ export const MissionCard: React.FC<MissionCardProps> = ({
 
       <div className="mission-route">
         <div className="route-point">
-          <span className="route-flag">{fromFlag}</span>
+          <span className="route-flag">{flagImg(fromCode)}</span>
           <span className="route-name">{fromName}</span>
         </div>
         <div className="route-arrow">→</div>
         <div className="route-point">
-          <span className="route-flag">{toFlag}</span>
+          <span className="route-flag">{flagImg(toCode)}</span>
           <span className="route-name">{toName}</span>
         </div>
       </div>

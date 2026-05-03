@@ -531,6 +531,9 @@
   white-space: nowrap;
   animation: chipFadeIn 0.3s ease-out;
   flex-shrink: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 @keyframes chipFadeIn {
@@ -562,6 +565,20 @@
 .city-chip:hover {
   border-color: var(--teal, #0cb8a2);
   background: color-mix(in srgb, var(--teal, #0cb8a2) 14%, transparent);
+}
+
+.city-chip-cc {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal, #0cb8a2) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--teal, #0cb8a2) 40%, transparent);
+  color: var(--text-bright);
+  line-height: 1.4;
 }
 
 /* ═══════════════════════════════════════════════════════════

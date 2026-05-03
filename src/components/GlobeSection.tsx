@@ -37,6 +37,10 @@ export const STATE = {
   decisionImpact: null as DecisionVisualImpact | null,
 };
 
+// Helper: render a flag <img> from ISO country code (works on Chromium/Windows)
+const flagImgUrl = (countryCode: string) =>
+  `https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`;
+
 // Helper: convert hex color to rgba with opacity
 const hexToRgba = (hex: string, opacity: number): string => {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -583,7 +587,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     const W = containerRef.current.clientWidth;
     const H = containerRef.current.clientHeight;
 
-    const globe = Globe()(containerRef.current)
+    const globe = Globe({ animateIn: false })(containerRef.current)
       .width(W)
       .height(H)
       .backgroundColor('rgba(0,0,0,0)')
@@ -630,8 +634,11 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         const tooltipBorder = theme === 'light' ? 'rgba(234,140,13,.4)' : 'rgba(232,160,32,.3)';
         const tooltipText = theme === 'light' ? '#ea8c0d' : '#e8a020';
         const tooltipMuted = theme === 'light' ? '#64748b' : '#364050';
-        const flag = d.flag || '🌐';
         const countryCode = typeof d.countryCode === 'string' ? d.countryCode : '';
+        const flagSrc = countryCode ? flagImgUrl(countryCode) : '';
+        const flagHtml = flagSrc
+          ? `<img src="${flagSrc}" width="24" height="18" style="border-radius:2px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.25);" alt="${countryCode}" />`
+          : '🌐';
 
         return `
           <div style="font-family:Inter,system-ui,sans-serif;font-size:13px;
@@ -639,7 +646,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             padding:8px 12px;border-radius:6px;color:${tooltipText};
             max-width:240px;white-space:normal;line-height:1.5;">
             <div style="font-size:16px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
-              <span>${flag}</span>
+              ${flagHtml}
               <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:999px;border:1px solid ${tooltipBorder};background:color-mix(in srgb, ${tooltipText} 12%, transparent);">${countryCode}</span>
               <span>${d.name}</span>
             </div>
@@ -764,7 +771,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .then(r => r.json())
       .then(world => {
         const countries = topojson.feature(world, world.objects.countries);
-        globe.polygonsData(countries.features);
+        globe.polygonsData((countries as any).features);
       })
       .catch(() => {
         console.log('Country data unavailable; globe still functional.');
@@ -839,11 +846,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
     const avgLat = impactedCities.reduce((sum, city) => sum + city.lat, 0) / impactedCities.length;
     const avgLng = impactedCities.reduce((sum, city) => sum + city.lng, 0) / impactedCities.length;
-    const fromCity = firstImpactedConnection
-      ? CITIES.find((c) => c.id === firstImpactedConnection.from)
+    const captured = firstImpactedConnection;
+    const fromCity = captured
+      ? CITIES.find((c) => c.id === captured.from)
       : null;
-    const toCity = firstImpactedConnection
-      ? CITIES.find((c) => c.id === firstImpactedConnection.to)
+    const toCity = captured
+      ? CITIES.find((c) => c.id === captured.to)
       : null;
     const focusLat = fromCity && toCity ? (fromCity.lat + toCity.lat) / 2 : avgLat;
     const focusLng = fromCity && toCity ? (fromCity.lng + toCity.lng) / 2 : avgLng;
@@ -1056,7 +1064,15 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           key={selectedCity}
         >
           <div className="city-dialog-flag-row">
-            <div className="city-dialog-flag">{selectedCityData.flag}</div>
+            <div className="city-dialog-flag">
+              <img
+                src={flagImgUrl(selectedCityData.countryCode)}
+                width={36}
+                height={27}
+                alt={selectedCityData.countryCode}
+                style={{ borderRadius: 3, boxShadow: '0 1px 4px rgba(0,0,0,.3)', display: 'block' }}
+              />
+            </div>
             <div className="city-dialog-country-code">{selectedCityData.countryCode}</div>
           </div>
           <div className="city-dialog-name">{selectedCityData.name}</div>

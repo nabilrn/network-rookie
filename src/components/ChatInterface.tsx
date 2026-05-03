@@ -557,16 +557,20 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       <div className="chat-suggestions">
         <div className="chat-suggestions-label">🌍 Focus a city:</div>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('sgp', "Show me Singapore and tell me why it's important")}>
-          🇸🇬 Singapore
+          <img src="https://flagcdn.com/20x15/sg.png" width={20} height={15} alt="SG" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <span className="city-chip-cc">SG</span> Singapore
         </button>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('tok', "Focus on Tokyo and explain its role in the internet")}>
-          🇯🇵 Tokyo
+          <img src="https://flagcdn.com/20x15/jp.png" width={20} height={15} alt="JP" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <span className="city-chip-cc">JP</span> Tokyo
         </button>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('nyc', "Show me New York and explain its transatlantic connections")}>
-          🇺🇸 New York
+          <img src="https://flagcdn.com/20x15/us.png" width={20} height={15} alt="US" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <span className="city-chip-cc">US</span> New York
         </button>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('fra', "Focus on Frankfurt and tell me about DE-CIX")}>
-          🇩🇪 Frankfurt
+          <img src="https://flagcdn.com/20x15/de.png" width={20} height={15} alt="DE" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <span className="city-chip-cc">DE</span> Frankfurt
         </button>
         <div className="chat-suggestions-label" style={{ marginTop: '4px' }}>💬 Ask me:</div>
         {chips.slice(0, 2).map((question, index) => (

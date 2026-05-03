@@ -63,18 +63,6 @@
   gap: 4px;
 }
 
-.flag-icon {
-  display: inline-block;
-  height: 24px;
-  width: 36px;
-  margin: 0 2px;
-  vertical-align: middle;
-}
-
-.drawer-city-flag .flag-icon {
-  height: 28px;
-  width: 42px;
-}
 
 .drawer-country-code {
   font-family: var(--mono);
