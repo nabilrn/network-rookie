@@ -54,10 +54,7 @@
 }
 
 .drawer-city-flag {
-  font-size: 28px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
+  display: inline;
 }
 
 .drawer-route-flag {
@@ -67,11 +64,11 @@
 }
 
 .flag-icon {
+  display: inline-block;
   height: 24px;
   width: 36px;
-  object-fit: cover;
-  border-radius: 2px;
-  display: inline-block;
+  margin: 0 2px;
+  vertical-align: middle;
 }
 
 .drawer-city-flag .flag-icon {

@@ -1,21 +1,6 @@
 import { CITIES, CONNECTIONS } from '../data/network';
-import SG from 'country-flag-icons/react/3x2/SG';
-import JP from 'country-flag-icons/react/3x2/JP';
-import GB from 'country-flag-icons/react/3x2/GB';
-import US from 'country-flag-icons/react/3x2/US';
-import AU from 'country-flag-icons/react/3x2/AU';
-import IN from 'country-flag-icons/react/3x2/IN';
-import AE from 'country-flag-icons/react/3x2/AE';
-import DE from 'country-flag-icons/react/3x2/DE';
-import FR from 'country-flag-icons/react/3x2/FR';
-import BR from 'country-flag-icons/react/3x2/BR';
-import CA from 'country-flag-icons/react/3x2/CA';
+import 'country-flag-icons/3x2/flags.css';
 import './SelectionDrawer.css';
-
-// Mapping country code to flag component
-const FLAG_COMPONENTS: Record<string, React.FC<any>> = {
-  SG, JP, GB, US, AU, IN, AE, DE, FR, BR, CA
-};
 
 interface SelectionDrawerProps {
   selectedCity: number | null;
@@ -75,20 +60,20 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
       },
     ];
 
-    const FromFlag = FLAG_COMPONENTS[fromCity.countryCode];
-    const ToFlag = FLAG_COMPONENTS[toCity.countryCode];
+    const FromFlag = fromCity.countryCode;
+    const ToFlag = toCity.countryCode;
 
     return (
       <div className="selection-drawer state-c">
         <div className="drawer-header-row">
           <h3 className="drawer-header">
             <span className="drawer-route-flag">
-              {FromFlag ? <FromFlag className="flag-icon" title={fromCity.name} /> : <span>{fromCity.flag}</span>}
+              <span className={`flag-icon flag-icon--${FromFlag.toLocaleLowerCase()}`} title={fromCity.name} />
               <span className="drawer-country-code">{fromCity.countryCode}</span>
             </span>
             {fromCity.name} →
             <span className="drawer-route-flag">
-              {ToFlag ? <ToFlag className="flag-icon" title={toCity.name} /> : <span>{toCity.flag}</span>}
+              <span className={`flag-icon flag-icon--${ToFlag.toLocaleLowerCase()}`} title={toCity.name} />
               <span className="drawer-country-code">{toCity.countryCode}</span>
             </span>
             {toCity.name}
@@ -122,15 +107,13 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
     return null;
   }
 
-  const CityFlag = FLAG_COMPONENTS[city.countryCode];
+  const CityFlag = city.countryCode;
 
   return (
     <div className="selection-drawer state-b">
         <div className="drawer-header-row">
           <h3 className="drawer-header drawer-city-header">
-            <span className="drawer-city-flag">
-              {CityFlag ? <CityFlag className="flag-icon" title={city.name} /> : <span>{city.flag}</span>}
-            </span>
+            <span className={`flag-icon flag-icon--${CityFlag.toLocaleLowerCase()}`} title={city.name} />
             <span className="drawer-country-code">{city.countryCode}</span>
             <span>{city.name}</span>
           </h3>
