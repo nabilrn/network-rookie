@@ -19,12 +19,11 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
   };
 
   const selectedOption = decision.options.find((opt) => opt.id === selectedOptionId);
-  const recommendedOption = decision.options.find((opt) => opt.id === decision.recommended);
 
   return (
     <div className="decision-card">
       <div className="decision-header">
-        <div className="decision-mode-badge">🎯 Decision Point</div>
+        <div className="decision-mode-badge">🎯 Step 2: Choose Priority</div>
         <h3 className="decision-question">{decision.question}</h3>
       </div>
 
@@ -37,9 +36,9 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
             disabled={isLoading || selectedOptionId !== null}
             title={
               option.id === decision.recommended
-                ? 'Recommended for stability'
+                ? 'Recommended for a stable experience'
                 : selectedOptionId === null
-                  ? 'Click to choose'
+                  ? 'Choose this priority'
                   : 'Already selected'
             }
           >
@@ -48,7 +47,7 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
               <div className="option-label">{option.label}</div>
               <div className="option-description">{option.description}</div>
               {option.id === decision.recommended && selectedOptionId === null && (
-                <div className="option-hint">✨ Recommended for network stability</div>
+                <div className="option-hint">✨ Recommended for a more balanced experience</div>
               )}
             </div>
           </button>
@@ -60,7 +59,7 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
           <p className="decision-hint">
             <strong>Why this matters:</strong> {decision.why}
           </p>
-          <p className="decision-loading">{isLoading ? 'Analyzing impact...' : 'Consequence visible on globe →'}</p>
+          <p className="decision-loading">{isLoading ? 'Checking impact...' : 'Applied on globe →'}</p>
         </div>
       )}
     </div>

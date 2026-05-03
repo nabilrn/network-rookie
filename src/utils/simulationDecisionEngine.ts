@@ -36,6 +36,14 @@ export interface DecisionResult extends Decision {
   nextStep: string; // what happens next
 }
 
+export interface DecisionVisualImpact {
+  mode: 'high-load' | 'packet-loss' | 'cable-cut';
+  selectedOptionId: string;
+  selectedOptionLabel: string;
+  consequence: DecisionConsequence;
+  appliedAt: number;
+}
+
 /**
  * Get decision set for a given mode
  */
@@ -120,17 +128,17 @@ export function calculateConsequence(
   const consequences: Record<string, Record<string, DecisionConsequence>> = {
     'high-load': {
       'video-priority': {
-        affectedRoutes: ['sgp-tok', 'tok-lon', 'lon-sfo', 'sfo-la'],
+        affectedRoutes: ['tok-sgp-jupiter', 'nyc-lon-aec1', 'lon-fra-terrestrial', 'lax-tok-faster'],
         impactType: 'mixed',
         summary:
           'Video services get fast, smooth playback. But email, messaging, and web browsing slow down significantly due to less available bandwidth.',
         tradeoff: 'Video quality stays high, but users experience slower email and web access.',
         userExperience:
           'Netflix and YouTube work great. Checking email or loading web pages takes 3-5x longer than normal. Video calls get priority over everything else.',
-        highlightCities: ['tok', 'lon', 'sfo'],
+        highlightCities: ['tok', 'lon', 'lax'],
       },
       'fair-distribution': {
-        affectedRoutes: CONNECTIONS.map((c) => `${c.from}-${c.to}`),
+        affectedRoutes: CONNECTIONS.map((c) => c.id),
         impactType: 'positive',
         summary: 'All services share bandwidth equally. Nothing is super fast, but everything works reasonably well.',
         tradeoff: 'Video may buffer occasionally, but web and email remain responsive.',
@@ -141,17 +149,17 @@ export function calculateConsequence(
     },
     'packet-loss': {
       'retry-aggressive': {
-        affectedRoutes: ['sgp-syd', 'syd-la', 'la-sfo'],
+        affectedRoutes: ['syd-sgp-indigo', 'syd-lax-sc', 'lax-sgp-sea-us'],
         impactType: 'negative',
         summary:
           'Retrying lost packets causes network congestion. Latency increases even more, and new packets get lost trying to reach the already-full cables.',
         tradeoff: 'You send more data, which makes congestion worse. Network becomes slower overall.',
         userExperience:
           'Audio calls sound choppy at first, then cut out. File downloads stall. Everything becomes painfully slow as network backs up.',
-        highlightCities: ['syd', 'la'],
+        highlightCities: ['syd', 'lax'],
       },
       'reduce-quality': {
-        affectedRoutes: ['sgp-syd', 'syd-la', 'la-sfo'],
+        affectedRoutes: ['syd-sgp-indigo', 'syd-lax-sc', 'lax-sgp-sea-us'],
         impactType: 'positive',
         summary:
           'Sending smaller, lower-quality streams uses less bandwidth. Lost packets matter less because each one carries less crucial data. Service recovers quickly.',
@@ -163,7 +171,7 @@ export function calculateConsequence(
     },
     'cable-cut': {
       'shortest-path': {
-        affectedRoutes: ['sgp-tok', 'tok-dxb'],
+        affectedRoutes: ['mum-dxb-smew5', 'dxb-lon-flag', 'dxb-fra-smw5'],
         impactType: 'negative',
         summary:
           'Shortest reroute avoids extra distance but sends traffic through congested hubs. Those hubs get overwhelmed. Data backs up.',
@@ -173,7 +181,7 @@ export function calculateConsequence(
         highlightCities: ['dxb', 'tok'],
       },
       'most-stable': {
-        affectedRoutes: ['sgp-lon', 'lon-sfo', 'sfo-sjc'],
+        affectedRoutes: ['sgp-mum-smew4', 'lon-fra-terrestrial', 'nyc-lon-aec1'],
         impactType: 'positive',
         summary:
           'Stable routes have more backups. Traffic is spread across multiple links. If one fails, others pick up the load.',
@@ -181,7 +189,7 @@ export function calculateConsequence(
           'Route is slightly longer (10-15% higher latency). But the connection remains reliable even under stress.',
         userExperience:
           'Latency goes up a little (noticeable but acceptable). Video calls work fine, files download reliably, and the connection stays stable for hours.',
-        highlightCities: ['lon', 'sfo'],
+        highlightCities: ['lon', 'fra'],
       },
     },
   };
@@ -199,14 +207,8 @@ export function calculateConsequence(
  * Generate AI-friendly consequence narration
  */
 export function narrateConsequence(consequence: DecisionConsequence, selectedLabel: string): string {
-  return `You chose: **${selectedLabel}**
-
-**What happens:**
-${consequence.summary}
-
-**The tradeoff:**
-${consequence.tradeoff}
-
-**You'll notice:**
-${consequence.userExperience}`;
+  return `Decision: ${selectedLabel}
+What happens: ${consequence.summary}
+Tradeoff: ${consequence.tradeoff}
+User impact: ${consequence.userExperience}`;
 }

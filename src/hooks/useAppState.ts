@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 
 export type MissionStatus = 'inactive' | 'active' | 'success' | 'failed';
 
@@ -36,6 +37,7 @@ export function useAppState() {
   const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   const [compareMode, setCompareMode] = useState<boolean>(false);
+  const [decisionImpact, setDecisionImpact] = useState<DecisionVisualImpact | null>(null);
 
   // Save theme to localStorage whenever it changes
   useEffect(() => {
@@ -91,5 +93,7 @@ export function useAppState() {
     compareMode,
     setCompareMode,
     toggleCompareMode,
+    decisionImpact,
+    setDecisionImpact,
   };
 }

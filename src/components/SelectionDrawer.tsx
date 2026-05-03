@@ -1,4 +1,5 @@
 import { CITIES, CONNECTIONS } from '../data/network';
+import * as CountryFlags from 'country-flag-icons/react/3x2';
 import './SelectionDrawer.css';
 
 interface SelectionDrawerProps {
@@ -59,17 +60,20 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
       },
     ];
 
+    const FromFlag = CountryFlags[fromCity.countryCode as keyof typeof CountryFlags] as any;
+    const ToFlag = CountryFlags[toCity.countryCode as keyof typeof CountryFlags] as any;
+
     return (
       <div className="selection-drawer state-c">
         <div className="drawer-header-row">
           <h3 className="drawer-header">
             <span className="drawer-route-flag">
-              <span>{fromCity.flag}</span>
+              {FromFlag ? <FromFlag className="flag-icon" title={fromCity.name} /> : <span>{fromCity.flag}</span>}
               <span className="drawer-country-code">{fromCity.countryCode}</span>
             </span>
             {fromCity.name} →
             <span className="drawer-route-flag">
-              <span>{toCity.flag}</span>
+              {ToFlag ? <ToFlag className="flag-icon" title={toCity.name} /> : <span>{toCity.flag}</span>}
               <span className="drawer-country-code">{toCity.countryCode}</span>
             </span>
             {toCity.name}
@@ -103,11 +107,15 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
     return null;
   }
 
+  const CityFlag = CountryFlags[city.countryCode as keyof typeof CountryFlags] as any;
+
   return (
     <div className="selection-drawer state-b">
         <div className="drawer-header-row">
           <h3 className="drawer-header drawer-city-header">
-            <span className="drawer-city-flag">{city.flag}</span>
+            <span className="drawer-city-flag">
+              {CityFlag ? <CityFlag className="flag-icon" title={city.name} /> : <span>{city.flag}</span>}
+            </span>
             <span className="drawer-country-code">{city.countryCode}</span>
             <span>{city.name}</span>
           </h3>

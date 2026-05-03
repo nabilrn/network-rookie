@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAppState } from '../hooks/useAppState';
+import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { BrowserChrome } from '../components/BrowserChrome';
 import { GlobeSection, GlobeSectionRef } from '../components/GlobeSection';
 import { RightPanel, RightPanelRef } from '../components/RightPanel';
@@ -25,7 +26,10 @@ export default function App() {
     completeMission,
     resetMission,
     compareMode,
+    setCompareMode,
     toggleCompareMode,
+    decisionImpact,
+    setDecisionImpact,
   } = useAppState();
 
   const globeSectionRef = useRef<GlobeSectionRef>(null);
@@ -49,7 +53,20 @@ export default function App() {
     setSelectedArc(null);
     setSimulationMode(null);
     setOsiStep(null);
+    resetMission();
+    setCompareMode(false);
+    setDecisionImpact(null);
     handleChatReset();
+  };
+
+  const handleDecisionApplied = (impact: DecisionVisualImpact) => {
+    setDecisionImpact(impact);
+  };
+
+  const handleModeChange = (mode: string | null) => {
+    setSimulationMode(mode);
+    setCompareMode(false);
+    setDecisionImpact(null);
   };
 
   return (
@@ -63,9 +80,11 @@ export default function App() {
           selectedCity={selectedCity}
           selectedArc={selectedArc}
           simulationMode={simulationMode}
+          decisionImpact={decisionImpact}
+          onResetAll={handleSessionReset}
           onCitySelect={setSelectedCity}
           onArcSelect={setSelectedArc}
-          onModeChange={setSimulationMode}
+          onModeChange={handleModeChange}
         />
         <RightPanel
           ref={rightPanelRef}
@@ -79,10 +98,11 @@ export default function App() {
           toggleCompareMode={toggleCompareMode}
           onClearSelection={handleClearSelection}
           onCitySelect={setSelectedCity}
-          onModeChange={setSimulationMode}
+          onModeChange={handleModeChange}
           onMissionStart={startMission}
           onMissionComplete={completeMission}
           onMissionReset={resetMission}
+          onDecisionApplied={handleDecisionApplied}
         />
       </div>
       <Footer />

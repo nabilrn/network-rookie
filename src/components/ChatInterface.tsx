@@ -5,7 +5,8 @@ import { MissionCard } from './MissionCard';
 import { DecisionCard } from './DecisionCard';
 import { ModeComparePanel } from './ModeComparePanel';
 import type { Mission } from '../hooks/useAppState';
-import { getDecisionForMode, calculateConsequence, narrateConsequence } from '../utils/simulationDecisionEngine';
+import { getDecisionForMode, calculateConsequence, type DecisionVisualImpact } from '../utils/simulationDecisionEngine';
+import { getDecisionMarker, getDecisionMarkerMeaning, getGlobeLegendItems } from '../utils/globeLegend';
 import './ChatInterface.css';
 
 interface DisplayMessage {
@@ -36,16 +37,63 @@ interface ChatInterfaceProps {
   onMissionReset?: () => void;
   onToggleCompare?: () => void;
   onDecision?: (decisionPayload: DecisionResponse) => void;
+  onDecisionApplied?: (impact: DecisionVisualImpact) => void;
 }
 
 export interface ChatInterfaceRef {
   reset: () => void;
 }
 
+type SimMode = 'high-load' | 'packet-loss' | 'cable-cut';
+
+function toDecisionResponse(mode: SimMode): DecisionResponse {
+  const localDecision = getDecisionForMode(mode);
+  return {
+    type: 'decision',
+    mode: localDecision.mode,
+    question: localDecision.question,
+    options: localDecision.options.map(option => ({
+      id: option.id,
+      label: option.label,
+      description: option.description,
+    })),
+    recommended: localDecision.recommended,
+    why: localDecision.why,
+  };
+}
+
+function buildPriorityFollowupPrompt(
+  mode: SimMode,
+  selectedOptionId: string,
+  selectedLabel: string,
+  summary: string,
+  tradeoff: string,
+  userExperience: string,
+): string {
+  const markerCode = getDecisionMarker(mode, selectedOptionId);
+  const markerMeaning = getDecisionMarkerMeaning(mode, selectedOptionId);
+  return [
+    `I chose this priority: ${selectedLabel}.`,
+    `Current mode: ${mode}.`,
+    `Observed result: ${summary}`,
+    `Tradeoff: ${tradeoff}`,
+    `User experience: ${userExperience}`,
+    `Globe legend marker now on routes: "${markerCode}" which means: ${markerMeaning}`,
+    'City markers: "+" means improving and "!" means under stress.',
+    'Now explain this choice for a complete beginner in plain English.',
+    'Include one short line that starts with "Globe legend:".',
+    'Respond as type "explain" with max 80 words and one simple analogy sentence.',
+    'Do not ask another question.',
+  ].join('\n');
+}
+
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare, onDecision }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare, onDecision, onDecisionApplied }, ref) => {
     const [inputValue, setInputValue] = useState('');
     const [activeDecision, setActiveDecision] = useState<DecisionResponse | null>(null);
+    const [pendingDecisionMode, setPendingDecisionMode] = useState<SimMode | null>(null);
+    const [decisionAppliedMode, setDecisionAppliedMode] = useState<SimMode | null>(null);
+    const [selectedDecisionMarker, setSelectedDecisionMarker] = useState<{ code: string; meaning: string } | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
     const { messages, loading, error, lastPayload, send, clear, retry, chips } = useGeminiChat({
@@ -104,8 +152,28 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         onJourney(lastPayload);
       } else if (lastPayload.type === 'scenario') {
         onScenario(lastPayload.mode);
+        setPendingDecisionMode(lastPayload.mode);
+        setDecisionAppliedMode(null);
+        setActiveDecision(toDecisionResponse(lastPayload.mode));
+        setSelectedDecisionMarker(null);
       } else if (lastPayload.type === 'action') {
         onAction?.(lastPayload.action, lastPayload.payload);
+        if (
+          lastPayload.action === 'SET_MODE' &&
+          (lastPayload.payload === 'high-load' ||
+            lastPayload.payload === 'packet-loss' ||
+            lastPayload.payload === 'cable-cut')
+        ) {
+          setPendingDecisionMode(lastPayload.payload);
+          setDecisionAppliedMode(null);
+          setActiveDecision(toDecisionResponse(lastPayload.payload));
+          setSelectedDecisionMarker(null);
+        } else if (lastPayload.action === 'SET_MODE' && lastPayload.payload === 'normal') {
+          setPendingDecisionMode(null);
+          setDecisionAppliedMode(null);
+          setActiveDecision(null);
+          setSelectedDecisionMarker(null);
+        }
       } else if (lastPayload.type === 'mission') {
         const mission: Mission = {
           id: lastPayload.id,
@@ -118,6 +186,9 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         // Mission card will be rendered, user can click Start
       } else if (lastPayload.type === 'decision') {
         setActiveDecision(lastPayload);
+        setPendingDecisionMode(lastPayload.mode);
+        setDecisionAppliedMode(null);
+        setSelectedDecisionMarker(null);
         onDecision?.(lastPayload);
       }
     }, [lastPayload, onJourney, onScenario, onAction, onDecision]);
@@ -126,6 +197,10 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       reset: () => {
         clear();
         setInputValue('');
+        setActiveDecision(null);
+        setPendingDecisionMode(null);
+        setDecisionAppliedMode(null);
+        setSelectedDecisionMarker(null);
         handledPayloadRef.current = null;
       },
     }));
@@ -157,6 +232,17 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       if (sessionCapped || loading) return;
       // Trigger mode change immediately for instant visual feedback
       onAction?.('SET_MODE', mode);
+      if (mode === 'normal') {
+        setActiveDecision(null);
+        setPendingDecisionMode(null);
+        setDecisionAppliedMode(null);
+        setSelectedDecisionMarker(null);
+      } else if (mode === 'high-load' || mode === 'packet-loss' || mode === 'cable-cut') {
+        setPendingDecisionMode(mode);
+        setDecisionAppliedMode(null);
+        setActiveDecision(null);
+        setSelectedDecisionMarker(null);
+      }
       // Send the prompt so AI explains what's happening
       setInputValue('');
       await send(prompt);
@@ -179,6 +265,36 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
     // Determine active sim mode for chip highlighting
     const activeMode = simulationMode || 'normal';
+    useEffect(() => {
+      if (activeMode === 'normal') {
+        setPendingDecisionMode(null);
+        setDecisionAppliedMode(null);
+        setActiveDecision(null);
+        setSelectedDecisionMarker(null);
+      }
+    }, [activeMode]);
+
+    const shouldShowDecisionCard =
+      !!activeDecision &&
+      pendingDecisionMode === activeMode &&
+      decisionAppliedMode !== activeMode;
+    const canShowCompareControls = activeMode !== 'normal' && decisionAppliedMode === activeMode;
+    const closeCompareDialog = () => {
+      if (compareMode) {
+        onToggleCompare?.();
+      }
+    };
+
+    useEffect(() => {
+      if (!compareMode) return;
+      const onKeyDown = (event: globalThis.KeyboardEvent) => {
+        if (event.key === 'Escape') {
+          closeCompareDialog();
+        }
+      };
+      window.addEventListener('keydown', onKeyDown);
+      return () => window.removeEventListener('keydown', onKeyDown);
+    }, [compareMode]);
     const activeModeGuide: Record<string, { title: string; observe: string; cause: string; impact: string }> = {
       normal: {
         title: '🌐 Normal',
@@ -213,6 +329,24 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       'cable-cut': 'danger',
     };
     const guideTone = modeGuideTone[activeMode] ?? 'normal';
+    const modeLegendItems = useMemo(() => {
+      const base = getGlobeLegendItems(activeMode, null);
+      if (decisionAppliedMode === activeMode && selectedDecisionMarker) {
+        base.push({
+          id: 'decision-choice-inline',
+          symbol: selectedDecisionMarker.code,
+          text: selectedDecisionMarker.meaning,
+          tone: 'info',
+        });
+        base.push({
+          id: 'decision-impact-inline',
+          symbol: '+ / !',
+          text: 'City marker: + is improving, ! is under stress.',
+          tone: 'info',
+        });
+      }
+      return base.slice(0, 4);
+    }, [activeMode, decisionAppliedMode, selectedDecisionMarker]);
 
   return (
     <div className="chat-interface">
@@ -230,21 +364,21 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           <button
             className={`sim-chip sim-warn ${activeMode === 'high-load' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('high-load', 'Simulate rush hour / high load. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear real-world causes in plain English.')}
+            onClick={() => void handleSimChip('high-load', 'Simulate rush hour / high load. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear real-world causes in plain English. End by asking me which priority I want to choose first.')}
           >
             🚦 Rush Hour
           </button>
           <button
             className={`sim-chip sim-warn ${activeMode === 'packet-loss' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('packet-loss', 'Simulate packet loss. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Explain packet as small pieces of data and include clear causes.')}
+            onClick={() => void handleSimChip('packet-loss', 'Simulate packet loss. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Explain packet as small pieces of data and include clear causes. End by asking me which priority I want to choose first.')}
           >
             📶 Packet Loss
           </button>
           <button
             className={`sim-chip sim-danger ${activeMode === 'cable-cut' ? 'sim-active' : ''}`}
             disabled={loading}
-            onClick={() => void handleSimChip('cable-cut', 'Simulate a cable break. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear causes like anchors or earthquakes in plain English.')}
+            onClick={() => void handleSimChip('cable-cut', 'Simulate a cable break. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear causes like anchors or earthquakes in plain English. End by asking me which priority I want to choose first.')}
           >
             ✂️ Cable Break
           </button>
@@ -255,23 +389,62 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           <span className="sim-mode-guide-detail"><strong>Why it happens:</strong> {modeGuide.cause}</span>
           <span className="sim-mode-guide-detail"><strong>User impact:</strong> {modeGuide.impact}</span>
         </div>
+        <div className="sim-globe-legend">
+          <div className="sim-globe-legend-title">🗺️ Globe legend (matches the map)</div>
+          <div className="sim-globe-legend-list">
+            {modeLegendItems.map((item) => (
+              <div key={item.id} className="sim-globe-legend-item">
+                <span className={`sim-globe-legend-symbol sim-globe-legend-symbol--${item.tone}`}>
+                  {item.symbol}
+                </span>
+                <span className="sim-globe-legend-text">{item.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {activeMode !== 'normal' && !canShowCompareControls && (
+          <div className="sim-next-step">
+            👉 Next step: choose one priority option below first.
+          </div>
+        )}
 
         {/* Compare Mode Toggle */}
-        <button
-          className={`compare-toggle ${compareMode ? 'compare-active' : ''}`}
-          disabled={loading || activeMode === 'normal'}
-          onClick={() => onToggleCompare?.()}
-          title="Toggle before/after comparison view"
-        >
-          📊 Compare: Normal vs {activeMode === 'normal' ? 'Current' : activeMode.replace('-', ' ')}
-        </button>
+        {canShowCompareControls && (
+          <button
+            className={`compare-toggle ${compareMode ? 'compare-active' : ''}`}
+            disabled={loading}
+            onClick={() => onToggleCompare?.()}
+            title="Show before/after numbers"
+          >
+            📊 {compareMode ? 'Hide' : 'Show'} detailed comparison
+          </button>
+        )}
       </div>
 
-      {/* Compare Panel */}
-      <ModeComparePanel
-        mode={(activeMode as any) || 'normal'}
-        isVisible={compareMode && activeMode !== 'normal'}
-      />
+      {/* Compare Panel (center modal) */}
+      {compareMode && canShowCompareControls && (
+        <div className="compare-modal-overlay" onClick={closeCompareDialog}>
+          <div className="compare-modal-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="compare-modal-header">
+              <div className="compare-modal-title">📊 Detailed Comparison</div>
+              <button
+                className="compare-modal-close"
+                onClick={closeCompareDialog}
+                title="Close details"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="compare-modal-body">
+              <ModeComparePanel
+                mode={(activeMode as any) || 'normal'}
+                isVisible={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mission Card */}
       {activeMission && lastPayload?.type === 'mission' && (
@@ -293,35 +466,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         </div>
       )}
 
-      {/* Decision Card */}
-      {activeDecision && (
-        <div className="decision-container">
-          <DecisionCard
-            decision={{
-              id: activeDecision.mode,
-              mode: activeDecision.mode,
-              question: activeDecision.question,
-              options: activeDecision.options.map((opt) => ({
-                ...opt,
-                emoji: opt.label.split(' ')[0],
-              })),
-              recommended: activeDecision.recommended,
-              why: activeDecision.why,
-            }}
-            onSelectOption={(optionId) => {
-              const selectedOption = activeDecision.options.find((opt) => opt.id === optionId);
-              if (selectedOption) {
-                const consequence = calculateConsequence(activeDecision.mode, optionId);
-                const narration = narrateConsequence(consequence, selectedOption.label);
-                send(narration);
-                setActiveDecision(null);
-              }
-            }}
-            isLoading={loading}
-          />
-        </div>
-      )}
-
       {/* Chat Messages */}
       <div className="chat-messages" ref={messagesContainerRef}>
         {displayMessages.map(message => (
@@ -338,6 +482,57 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             </div>
           </div>
         ))}
+        {shouldShowDecisionCard && (
+          <div className="chat-message ai">
+            <div className="ai-dot" />
+            <div className="message-content-wrap decision-inline-wrap">
+              <div className="decision-inline-text">Which one should we prioritize?</div>
+              <DecisionCard
+                decision={{
+                  id: activeDecision.mode,
+                  mode: activeDecision.mode,
+                  question: activeDecision.question,
+                  options: activeDecision.options.map((opt) => ({
+                    ...opt,
+                    emoji: opt.label.split(' ')[0],
+                  })),
+                  recommended: activeDecision.recommended,
+                  why: activeDecision.why,
+                }}
+                onSelectOption={(optionId) => {
+                  const selectedOption = activeDecision.options.find((opt) => opt.id === optionId);
+                  if (selectedOption) {
+                    const consequence = calculateConsequence(activeDecision.mode, optionId);
+                    const markerCode = getDecisionMarker(activeDecision.mode, optionId);
+                    const markerMeaning = getDecisionMarkerMeaning(activeDecision.mode, optionId);
+                    onDecisionApplied?.({
+                      mode: activeDecision.mode,
+                      selectedOptionId: optionId,
+                      selectedOptionLabel: selectedOption.label,
+                      consequence,
+                      appliedAt: Date.now(),
+                    });
+                    setDecisionAppliedMode(activeDecision.mode);
+                    setPendingDecisionMode(null);
+                    setActiveDecision(null);
+                    setSelectedDecisionMarker({ code: markerCode, meaning: markerMeaning });
+                    void send(
+                      buildPriorityFollowupPrompt(
+                        activeDecision.mode,
+                        optionId,
+                        selectedOption.label,
+                        consequence.summary,
+                        consequence.tradeoff,
+                        consequence.userExperience,
+                      ),
+                    );
+                  }
+                }}
+                isLoading={loading}
+              />
+            </div>
+          </div>
+        )}
         {loading && (
           <div className="chat-message ai">
             <div className="ai-dot" />

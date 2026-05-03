@@ -1,8 +1,9 @@
 import { useRef, forwardRef, useImperativeHandle } from 'react';
 import { ChatInterface, ChatInterfaceRef } from './ChatInterface';
 import { resolveCityIndex } from '../data/network';
-import type { JourneyResponse } from '../hooks/useGeminiChat';
+import type { JourneyResponse, DecisionResponse } from '../hooks/useGeminiChat';
 import type { Mission } from '../hooks/useAppState';
+import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import './RightPanel.css';
 
 interface RightPanelProps {
@@ -20,7 +21,8 @@ interface RightPanelProps {
   onMissionStart?: (mission: Mission) => void;
   onMissionComplete?: () => void;
   onMissionReset?: () => void;
-  onDecision?: (decision: any) => void;
+  onDecision?: (decision: DecisionResponse) => void;
+  onDecisionApplied?: (impact: DecisionVisualImpact) => void;
 }
 
 export interface RightPanelRef {
@@ -28,7 +30,7 @@ export interface RightPanelRef {
 }
 
 export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, setOsiStep, toggleCompareMode, onClearSelection, onCitySelect, onModeChange, onMissionStart, onMissionComplete, onMissionReset, onDecision }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, setOsiStep, toggleCompareMode, onClearSelection, onCitySelect, onModeChange, onMissionStart, onMissionComplete, onMissionReset, onDecision, onDecisionApplied }, ref) => {
     const chatRef = useRef<ChatInterfaceRef>(null);
 
     useImperativeHandle(ref, () => ({
@@ -85,6 +87,7 @@ export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
           onAction={handleAction}
           onToggleCompare={toggleCompareMode}
           onDecision={onDecision}
+          onDecisionApplied={onDecisionApplied}
           onMissionStart={onMissionStart}
           onMissionComplete={onMissionComplete}
           onMissionReset={onMissionReset}

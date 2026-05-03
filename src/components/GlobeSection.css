@@ -10,6 +10,37 @@
   height: 100%;
 }
 
+.globe-reset-all-btn {
+  position: absolute;
+  top: 70px;
+  left: 16px;
+  z-index: 22;
+  border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--text-bright);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 16px rgba(2, 6, 23, 0.32);
+  transition: all 0.2s ease;
+}
+
+.globe-reset-all-btn:hover {
+  border-color: color-mix(in srgb, var(--amber) 75%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, var(--surface));
+  transform: translateY(-1px);
+}
+
+.globe-reset-all-btn:active {
+  transform: translateY(0);
+}
+
 /* Globe hint overlay */
 .globe-hint {
   position: absolute;
@@ -60,6 +91,42 @@
   background: color-mix(in srgb, #ef4444 14%, var(--surface));
 }
 
+.globe-sim-badge--success {
+  border-color: rgba(34, 197, 94, 0.62);
+  background: color-mix(in srgb, #22c55e 14%, var(--surface));
+}
+
+.globe-decision-badge {
+  position: absolute;
+  top: 86px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 520px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 19;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.globe-decision-badge--warn {
+  border-color: rgba(245, 158, 11, 0.62);
+  background: color-mix(in srgb, #f59e0b 13%, var(--surface));
+}
+
+.globe-decision-badge--danger {
+  border-color: rgba(239, 68, 68, 0.62);
+  background: color-mix(in srgb, #ef4444 13%, var(--surface));
+}
+
+.globe-decision-badge--success {
+  border-color: rgba(34, 197, 94, 0.62);
+  background: color-mix(in srgb, #22c55e 13%, var(--surface));
+}
+
 .globe-sim-badge-title {
   font-family: var(--mono);
   font-size: 11px;
@@ -72,6 +139,84 @@
 .globe-sim-badge-detail {
   font-size: 12px;
   line-height: 1.4;
+  color: var(--text);
+}
+
+.globe-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 18px;
+  z-index: 21;
+  width: min(360px, calc(100% - 28px));
+  border: 1px solid color-mix(in srgb, var(--border-strong) 42%, transparent);
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 10px;
+  padding: 9px 10px;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.globe-legend-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-bright);
+  margin-bottom: 7px;
+  font-weight: 700;
+}
+
+.globe-legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.globe-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.globe-legend-symbol {
+  min-width: 38px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--border-light) 65%, transparent);
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
+  padding: 2px 5px;
+  text-align: center;
+  line-height: 1.15;
+  color: var(--text-bright);
+}
+
+.globe-legend-symbol--neutral {
+  color: var(--text-bright);
+}
+
+.globe-legend-symbol--warn {
+  color: #f59e0b;
+}
+
+.globe-legend-symbol--danger {
+  color: #ef4444;
+}
+
+.globe-legend-symbol--success {
+  color: #22c55e;
+}
+
+.globe-legend-symbol--info {
+  color: #38bdf8;
+}
+
+.globe-legend-text {
+  font-size: 11px;
+  line-height: 1.35;
   color: var(--text);
 }
 

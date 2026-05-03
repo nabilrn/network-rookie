@@ -53,15 +53,30 @@
   gap: 8px;
 }
 
+.drawer-city-flag {
+  font-size: 28px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
 .drawer-route-flag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
-.drawer-city-flag {
-  font-size: 28px;
-  line-height: 1;
+.flag-icon {
+  height: 24px;
+  width: 36px;
+  object-fit: cover;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.drawer-city-flag .flag-icon {
+  height: 28px;
+  width: 42px;
 }
 
 .drawer-country-code {
