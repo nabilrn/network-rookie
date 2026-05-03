@@ -3,7 +3,7 @@ import { GlobeSectionRef } from './GlobeSection';
 import './InactivityWatcher.css';
 
 interface InactivityWatcherProps {
-  globeSectionRef: React.RefObject<GlobeSectionRef>;
+  globeSectionRef: React.RefObject<GlobeSectionRef | null>;
   onChatReset?: () => void;
   onReset?: () => void;
   theme: 'dark' | 'light';
@@ -16,8 +16,8 @@ export function InactivityWatcher({ globeSectionRef, onChatReset, onReset, theme
   const [showOverlay, setShowOverlay] = useState(false);
   const [countdown, setCountdown] = useState(COUNTDOWN_DURATION);
   const lastActivityRef = useRef<number>(Date.now());
-  const inactivityTimerRef = useRef<NodeJS.Timeout>();
-  const countdownTimerRef = useRef<NodeJS.Timeout>();
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout>>(0);
+  const countdownTimerRef = useRef<ReturnType<typeof setInterval>>(0);
 
   const resetSession = useCallback(() => {
     // TODO: SERVICE - Log session reset analytics event

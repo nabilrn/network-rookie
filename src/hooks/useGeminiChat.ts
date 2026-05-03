@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   CHIP_QUESTIONS,
@@ -264,7 +265,7 @@ function parsePayload(rawText: string): GeminiPayload {
 
     if (!validSteps) throw new Error('Invalid journey steps');
 
-    return payload as JourneyResponse;
+    return payload as unknown as JourneyResponse;
   }
 
   if (payload.type === 'explain') {
@@ -276,7 +277,7 @@ function parsePayload(rawText: string): GeminiPayload {
     ) {
       throw new Error('Invalid explain payload');
     }
-    return payload as ExplainResponse;
+    return payload as unknown as ExplainResponse;
   }
 
   if (payload.type === 'scenario') {
@@ -288,14 +289,14 @@ function parsePayload(rawText: string): GeminiPayload {
     ) {
       throw new Error('Invalid scenario payload');
     }
-    return payload as ScenarioResponse;
+    return payload as unknown as ScenarioResponse;
   }
 
   if (payload.type === 'fact') {
     if (typeof payload.emoji !== 'string' || typeof payload.content !== 'string') {
       throw new Error('Invalid fact payload');
     }
-    return payload as FactResponse;
+    return payload as unknown as FactResponse;
   }
 
   if (payload.type === 'action') {
@@ -316,7 +317,7 @@ function parsePayload(rawText: string): GeminiPayload {
       };
     }
 
-    return payload as ActionResponse;
+    return payload as unknown as ActionResponse;
   }
 
   if (payload.type === 'mission') {
@@ -330,7 +331,7 @@ function parsePayload(rawText: string): GeminiPayload {
     ) {
       throw new Error('Invalid mission payload');
     }
-    return payload as MissionResponse;
+    return payload as unknown as MissionResponse;
   }
 
   if (payload.type === 'decision') {
@@ -348,7 +349,7 @@ function parsePayload(rawText: string): GeminiPayload {
     if (!opts.every(opt => typeof opt.id === 'string' && typeof opt.label === 'string' && typeof opt.description === 'string')) {
       throw new Error('Invalid decision options');
     }
-    return payload as DecisionResponse;
+    return payload as unknown as DecisionResponse;
   }
 
   throw new Error('Unknown payload type');

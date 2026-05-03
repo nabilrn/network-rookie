@@ -587,7 +587,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     const W = containerRef.current.clientWidth;
     const H = containerRef.current.clientHeight;
 
-    const globe = Globe({ animateIn: false })(containerRef.current)
+    const globe = new Globe(containerRef.current!, { animateIn: false })
       .width(W)
       .height(H)
       .backgroundColor('rgba(0,0,0,0)')
@@ -597,13 +597,15 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .pointsData(CITIES)
       .pointLat('lat')
       .pointLng('lng')
-      .pointColor((d: any, i: number) => {
+      .pointColor((d: any) => {
+        const i = CITIES.indexOf(d);
         return STATE.selectedCity === i
           ? (theme === 'light' ? '#ea8c0d' : '#e8a020')
           : '#e8a020';
       })
       .pointAltitude(0.012)
-      .pointRadius((d: any, i: number) => {
+      .pointRadius((d: any) => {
+        const i = CITIES.indexOf(d);
         return STATE.selectedCity === i ? 1.0 : 0.65;
       })
       .onPointClick((point: any, event: any, { lat, lng, altitude }: any) => {
@@ -826,7 +828,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     if (!globeRef.current || !decisionImpact || decisionImpact.mode !== simulationMode) return;
 
     const impactedCityIds = new Set<string>(decisionImpact.consequence.highlightCities ?? []);
-    let firstImpactedConnection: (typeof CONNECTIONS)[number] | null = null;
+    let firstImpactedConnection: (typeof CONNECTIONS)[number] | null = null as (typeof CONNECTIONS)[number] | null;
     decisionImpact.consequence.affectedRoutes.forEach((routeKey) => {
       const conn = CONNECTIONS.find(
         (item) =>
