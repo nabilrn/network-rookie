@@ -1,6 +1,21 @@
 import { CITIES, CONNECTIONS } from '../data/network';
-import * as CountryFlags from 'country-flag-icons/react/3x2';
+import SG from 'country-flag-icons/react/3x2/SG';
+import JP from 'country-flag-icons/react/3x2/JP';
+import GB from 'country-flag-icons/react/3x2/GB';
+import US from 'country-flag-icons/react/3x2/US';
+import AU from 'country-flag-icons/react/3x2/AU';
+import IN from 'country-flag-icons/react/3x2/IN';
+import AE from 'country-flag-icons/react/3x2/AE';
+import DE from 'country-flag-icons/react/3x2/DE';
+import FR from 'country-flag-icons/react/3x2/FR';
+import BR from 'country-flag-icons/react/3x2/BR';
+import CA from 'country-flag-icons/react/3x2/CA';
 import './SelectionDrawer.css';
+
+// Mapping country code to flag component
+const FLAG_COMPONENTS: Record<string, React.FC<any>> = {
+  SG, JP, GB, US, AU, IN, AE, DE, FR, BR, CA
+};
 
 interface SelectionDrawerProps {
   selectedCity: number | null;
@@ -60,8 +75,8 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
       },
     ];
 
-    const FromFlag = CountryFlags[fromCity.countryCode as keyof typeof CountryFlags] as any;
-    const ToFlag = CountryFlags[toCity.countryCode as keyof typeof CountryFlags] as any;
+    const FromFlag = FLAG_COMPONENTS[fromCity.countryCode];
+    const ToFlag = FLAG_COMPONENTS[toCity.countryCode];
 
     return (
       <div className="selection-drawer state-c">
@@ -107,7 +122,7 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
     return null;
   }
 
-  const CityFlag = CountryFlags[city.countryCode as keyof typeof CountryFlags] as any;
+  const CityFlag = FLAG_COMPONENTS[city.countryCode];
 
   return (
     <div className="selection-drawer state-b">
