@@ -33,3 +33,9 @@ coverage/
 
 # local tools
 .netlify/
+
+# presentation / proposal artifacts in repo root
+Network_Rookie_Proposal_*.md
+*-presentation.html
+poster-mockup.html
+present_assets/

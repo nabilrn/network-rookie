@@ -1,5 +1,5 @@
 .mode-compare-panel {
-  background: var(--overlay, rgba(15, 23, 42, 0.6));
+  background: color-mix(in srgb, var(--surface, #100f15) 88%, var(--overlay, rgba(15, 23, 42, 0.6)) 12%);
   border: 1px solid var(--border-light, rgba(71, 85, 105, 0.4));
   border-radius: 8px;
   padding: 14px;
@@ -49,8 +49,8 @@
   text-transform: uppercase;
   padding: 4px 8px;
   border-radius: 4px;
-  background: rgba(71, 85, 105, 0.3);
-  color: var(--text-muted, #cbd5e1);
+  background: color-mix(in srgb, var(--muted, #64748b) 30%, transparent);
+  color: var(--muted, #cbd5e1);
 }
 
 .compare-badge[data-significant='true'] {
@@ -67,8 +67,8 @@
 }
 
 .metric-card {
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.25);
+  background: color-mix(in srgb, var(--surface, #100f15) 86%, var(--overlay, rgba(15, 23, 42, 0.5)) 14%);
+  border: 1px solid var(--border-light, rgba(71, 85, 105, 0.25));
   border-radius: 6px;
   padding: 10px;
 }
@@ -102,7 +102,7 @@
 .value-label {
   font-size: 9px;
   letter-spacing: 0.5px;
-  color: var(--text-muted, #cbd5e1);
+  color: var(--muted, #cbd5e1);
   text-transform: uppercase;
 }
 
@@ -123,7 +123,7 @@
 
 .value-subtext {
   font-size: 10px;
-  color: var(--text-muted, #cbd5e1);
+  color: var(--muted, #cbd5e1);
   line-height: 1.2;
 }
 
@@ -144,17 +144,17 @@
 }
 
 .metric-arrow {
-  color: var(--text-muted, #cbd5e1);
+  color: var(--muted, #cbd5e1);
   font-weight: 700;
   margin: 0 4px;
 }
 
 .metric-delta {
   font-size: 10px;
-  color: var(--text-muted, #cbd5e1);
+  color: var(--muted, #cbd5e1);
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(71, 85, 105, 0.2);
+  border-top: 1px solid var(--border-light, rgba(71, 85, 105, 0.2));
 }
 
 .compare-insight {
@@ -176,6 +176,39 @@
   font-size: 11px;
   line-height: 1.4;
   color: var(--text, #e2e8f0);
+}
+
+[data-theme="light"] .mode-compare-panel {
+  background: #fffaf0;
+  border-color: rgba(234, 140, 13, 0.28);
+}
+
+[data-theme="light"] .mode-compare-panel[data-mode='high-load'] {
+  background: #fffbeb;
+}
+
+[data-theme="light"] .mode-compare-panel[data-mode='packet-loss'] {
+  background: #f8fbff;
+}
+
+[data-theme="light"] .mode-compare-panel[data-mode='cable-cut'] {
+  background: #fff7f7;
+}
+
+[data-theme="light"] .metric-card {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.34);
+}
+
+[data-theme="light"] .compare-badge[data-significant='true'] {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+  box-shadow: none;
+}
+
+[data-theme="light"] .compare-insight {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.26);
 }
 
 @media (max-width: 640px) {
