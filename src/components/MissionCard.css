@@ -1,28 +1,24 @@
 .mission-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  background: var(--color-surface, rgba(15, 23, 42, 0.8));
-  border: 1px solid var(--color-border, rgba(71, 85, 105, 0.5));
-  border-radius: 8px;
-  backdrop-filter: blur(8px);
+  gap: 14px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
 }
 
 .mission-card[data-status='active'] {
-  background: rgba(30, 58, 138, 0.2);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+  background: color-mix(in srgb, var(--surface-secondary) 60%, var(--surface));
 }
 
 .mission-card[data-status='success'] {
-  background: rgba(21, 128, 61, 0.15);
-  border-color: rgba(34, 197, 94, 0.4);
+  background: color-mix(in srgb, var(--surface-secondary) 58%, var(--surface));
 }
 
 .mission-card[data-status='failed'] {
-  background: rgba(127, 29, 29, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
+  background: color-mix(in srgb, var(--surface-secondary) 58%, var(--surface));
 }
 
 .mission-header {
@@ -39,24 +35,30 @@
 
 .mission-title {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--color-text, #f1f5f9);
-  letter-spacing: 0.5px;
+  color: var(--text-bright);
 }
 
 .mission-status {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.mission-status[data-status='active'],
+.mission-status[data-status='success'],
+.mission-status[data-status='failed'] {
+  color: var(--text-secondary);
 }
 
 .mission-goal {
   margin: 0;
   font-size: 13px;
-  color: var(--color-muted, #cbd5e1);
-  line-height: 1.4;
+  color: var(--text);
+  line-height: 1.45;
 }
 
 .mission-goal p {
@@ -68,10 +70,11 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 8px;
-  background: rgba(15, 23, 42, 0.5);
-  border-radius: 6px;
-  border: 1px solid rgba(71, 85, 105, 0.3);
+  padding: 10px 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .route-point {
@@ -80,23 +83,37 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-text, #f1f5f9);
+  color: var(--text-bright);
 }
 
 .route-flag {
-  font-size: 18px;
   display: inline-flex;
   align-items: center;
 }
 
+.route-flag-img {
+  border-radius: 2px;
+  vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  display: inline-block;
+}
+
+.route-fallback {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
 .route-name {
-  font-family: var(--mono, 'Courier New', monospace);
-  letter-spacing: 0.5px;
+  font-family: var(--sans);
+  letter-spacing: 0.01em;
 }
 
 .route-arrow {
-  font-size: 14px;
-  color: var(--color-muted, #cbd5e1);
+  font-size: 13px;
+  color: var(--muted);
   font-weight: 700;
 }
 
@@ -109,48 +126,44 @@
 .mission-btn {
   flex: 1;
   min-width: 120px;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
   text-align: center;
+  border: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #3b82f6, #1e40af);
-  color: white;
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  background: color-mix(in srgb, var(--steel) 10%, var(--surface));
+  color: var(--text-bright);
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  background: color-mix(in srgb, var(--steel) 16%, var(--surface));
 }
 
 .btn-success {
-  background: linear-gradient(135deg, #22c55e, #15803d);
-  color: white;
-  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+  background: color-mix(in srgb, var(--surface-secondary) 66%, var(--surface));
+  color: var(--text-bright);
 }
 
 .btn-success:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+  background: color-mix(in srgb, var(--surface-secondary) 74%, var(--surface));
 }
 
 .btn-secondary {
-  background: rgba(71, 85, 105, 0.3);
-  color: var(--color-muted, #cbd5e1);
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--text);
 }
 
 .btn-secondary:hover {
-  background: rgba(71, 85, 105, 0.5);
-  color: var(--color-text, #f1f5f9);
+  color: var(--text-bright);
+  background: color-mix(in srgb, var(--surface-secondary) 66%, var(--surface));
 }
 
 @media (max-width: 640px) {
@@ -169,7 +182,7 @@
 
   .mission-btn {
     min-width: 100px;
-    padding: 8px 12px;
-    font-size: 11px;
+    padding: 8px 11px;
+    font-size: 10px;
   }
 }

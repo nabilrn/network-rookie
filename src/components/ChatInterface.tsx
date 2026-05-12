@@ -6,7 +6,7 @@ import { DecisionCard } from './DecisionCard';
 import { ModeComparePanel } from './ModeComparePanel';
 import type { Mission } from '../hooks/useAppState';
 import { getDecisionForMode, calculateConsequence, type DecisionVisualImpact } from '../utils/simulationDecisionEngine';
-import { getDecisionMarker, getDecisionMarkerMeaning, getGlobeLegendItems } from '../utils/globeLegend';
+import { getDecisionMarker, getDecisionMarkerMeaning } from '../utils/globeLegend';
 import './ChatInterface.css';
 
 interface DisplayMessage {
@@ -18,7 +18,7 @@ interface DisplayMessage {
 
 const INITIAL_MESSAGE: DisplayMessage = {
   id: '1',
-  text: '🤖 I\'m your AI Network Copilot. I can control the globe, run simulations, and explain how the internet works. Try the commands below or just ask me anything!',
+  text: 'I\'m your AI network guide. I can control the globe, run simulations, and explain how the internet works. Use the controls on the globe or ask me anything.',
   sender: 'ai',
 };
 
@@ -42,9 +42,21 @@ interface ChatInterfaceProps {
 
 export interface ChatInterfaceRef {
   reset: () => void;
+  applySimulationMode: (mode: string) => void;
 }
 
 type SimMode = 'high-load' | 'packet-loss' | 'cable-cut';
+
+const SIMULATION_PROMPTS: Record<string, string> = {
+  normal:
+    'Set the network to normal mode. Explain in 3 short lines with these labels: "What you see:", "Why it happens:", "User impact:". Keep it plain English.',
+  'high-load':
+    'Simulate rush hour / high load. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear real-world causes in plain English. End by asking me which priority I want to choose first.',
+  'packet-loss':
+    'Simulate packet loss. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Explain packet as small pieces of data and include clear causes. End by asking me which priority I want to choose first.',
+  'cable-cut':
+    'Simulate a cable break. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear causes like anchors or earthquakes in plain English. End by asking me which priority I want to choose first.',
+};
 
 function toDecisionResponse(mode: SimMode): DecisionResponse {
   const localDecision = getDecisionForMode(mode);
@@ -93,7 +105,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
     const [activeDecision, setActiveDecision] = useState<DecisionResponse | null>(null);
     const [pendingDecisionMode, setPendingDecisionMode] = useState<SimMode | null>(null);
     const [decisionAppliedMode, setDecisionAppliedMode] = useState<SimMode | null>(null);
-    const [selectedDecisionMarker, setSelectedDecisionMarker] = useState<{ code: string; meaning: string } | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
     const { messages, loading, error, lastPayload, send, clear, retry, chips } = useGeminiChat({
@@ -155,7 +166,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         setPendingDecisionMode(lastPayload.mode);
         setDecisionAppliedMode(null);
         setActiveDecision(toDecisionResponse(lastPayload.mode));
-        setSelectedDecisionMarker(null);
       } else if (lastPayload.type === 'action') {
         onAction?.(lastPayload.action, lastPayload.payload);
         if (
@@ -167,12 +177,10 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           setPendingDecisionMode(lastPayload.payload);
           setDecisionAppliedMode(null);
           setActiveDecision(toDecisionResponse(lastPayload.payload));
-          setSelectedDecisionMarker(null);
         } else if (lastPayload.action === 'SET_MODE' && lastPayload.payload === 'normal') {
           setPendingDecisionMode(null);
           setDecisionAppliedMode(null);
           setActiveDecision(null);
-          setSelectedDecisionMarker(null);
         }
       } else if (lastPayload.type === 'mission') {
         const mission: Mission = {
@@ -188,7 +196,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         setActiveDecision(lastPayload);
         setPendingDecisionMode(lastPayload.mode);
         setDecisionAppliedMode(null);
-        setSelectedDecisionMarker(null);
         onDecision?.(lastPayload);
       }
     }, [lastPayload, onJourney, onScenario, onAction, onDecision]);
@@ -200,8 +207,10 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         setActiveDecision(null);
         setPendingDecisionMode(null);
         setDecisionAppliedMode(null);
-        setSelectedDecisionMarker(null);
         handledPayloadRef.current = null;
+      },
+      applySimulationMode: (mode: string) => {
+        void handleSimChip(mode);
       },
     }));
 
@@ -228,7 +237,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
     // Direct simulation chips — trigger mode change + zoom out instantly,
     // then also send the message so the AI explains it
-    const handleSimChip = async (mode: string, prompt: string) => {
+    const handleSimChip = async (mode: string, prompt: string = SIMULATION_PROMPTS[mode] ?? '') => {
       if (sessionCapped || loading) return;
       // Trigger mode change immediately for instant visual feedback
       onAction?.('SET_MODE', mode);
@@ -236,14 +245,13 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         setActiveDecision(null);
         setPendingDecisionMode(null);
         setDecisionAppliedMode(null);
-        setSelectedDecisionMarker(null);
       } else if (mode === 'high-load' || mode === 'packet-loss' || mode === 'cable-cut') {
         setPendingDecisionMode(mode);
         setDecisionAppliedMode(null);
         setActiveDecision(null);
-        setSelectedDecisionMarker(null);
       }
       // Send the prompt so AI explains what's happening
+      if (!prompt) return;
       setInputValue('');
       await send(prompt);
     };
@@ -270,7 +278,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         setPendingDecisionMode(null);
         setDecisionAppliedMode(null);
         setActiveDecision(null);
-        setSelectedDecisionMarker(null);
       }
     }, [activeMode]);
 
@@ -295,139 +302,14 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       window.addEventListener('keydown', onKeyDown);
       return () => window.removeEventListener('keydown', onKeyDown);
     }, [compareMode]);
-    const activeModeGuide: Record<string, { title: string; observe: string; cause: string; impact: string }> = {
-      normal: {
-        title: '🌐 Normal',
-        observe: 'Traffic flows smoothly with stable route brightness and no major rerouting.',
-        cause: 'Demand is steady, routes are healthy, and there are no major outages.',
-        impact: 'Apps feel fast and consistent for most users.',
-      },
-      'high-load': {
-        title: '🚦 Rush Hour',
-        observe: 'More routes look busy and some paths start to queue.',
-        cause: 'Peak evening traffic, viral live events, game updates, or major app releases.',
-        impact: 'Video may buffer more and response time can feel slower.',
-      },
-      'packet-loss': {
-        title: '📶 Packet Loss',
-        observe: 'Traffic appears unstable because some small data pieces must be sent again.',
-        cause: 'Weak wireless signal, overloaded links, interference, or damaged/noisy connections.',
-        impact: 'Calls can stutter, games lag, and pages may feel jumpy to load.',
-      },
-      'cable-cut': {
-        title: '✂️ Cable Break',
-        observe: 'A route drops and traffic reroutes through longer backup paths.',
-        cause: 'Ship anchors, undersea earthquakes, fishing activity, or construction accidents.',
-        impact: 'Some regions see slower speeds until alternate routes fully absorb the traffic.',
-      },
-    };
-    const modeGuide = activeModeGuide[activeMode] ?? activeModeGuide.normal;
-    const modeGuideTone: Record<string, string> = {
-      normal: 'normal',
-      'high-load': 'warn',
-      'packet-loss': 'loss',
-      'cable-cut': 'danger',
-    };
-    const guideTone = modeGuideTone[activeMode] ?? 'normal';
-    const modeLegendItems = useMemo(() => {
-      const base = getGlobeLegendItems(activeMode, null);
-      if (decisionAppliedMode === activeMode && selectedDecisionMarker) {
-        base.push({
-          id: 'decision-choice-inline',
-          symbol: selectedDecisionMarker.code,
-          text: selectedDecisionMarker.meaning,
-          tone: 'info',
-        });
-        base.push({
-          id: 'decision-impact-inline',
-          symbol: '+ / !',
-          text: 'City marker: + is improving, ! is under stress.',
-          tone: 'info',
-        });
-      }
-      return base.slice(0, 4);
-    }, [activeMode, decisionAppliedMode, selectedDecisionMarker]);
-
   return (
     <div className="chat-interface">
-      {/* Simulation Control Bar */}
-      <div className="sim-control-bar">
-        <div className="sim-bar-label">⚡ Simulation Controls</div>
-        <div className="sim-chips">
-          <button
-            className={`sim-chip ${activeMode === 'normal' ? 'sim-active' : ''}`}
-            disabled={loading}
-            onClick={() => void handleSimChip('normal', 'Set the network to normal mode. Explain in 3 short lines with these labels: "What you see:", "Why it happens:", "User impact:". Keep it plain English.')}
-          >
-            🌐 Normal
-          </button>
-          <button
-            className={`sim-chip sim-warn ${activeMode === 'high-load' ? 'sim-active' : ''}`}
-            disabled={loading}
-            onClick={() => void handleSimChip('high-load', 'Simulate rush hour / high load. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear real-world causes in plain English. End by asking me which priority I want to choose first.')}
-          >
-            🚦 Rush Hour
-          </button>
-          <button
-            className={`sim-chip sim-warn ${activeMode === 'packet-loss' ? 'sim-active' : ''}`}
-            disabled={loading}
-            onClick={() => void handleSimChip('packet-loss', 'Simulate packet loss. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Explain packet as small pieces of data and include clear causes. End by asking me which priority I want to choose first.')}
-          >
-            📶 Packet Loss
-          </button>
-          <button
-            className={`sim-chip sim-danger ${activeMode === 'cable-cut' ? 'sim-active' : ''}`}
-            disabled={loading}
-            onClick={() => void handleSimChip('cable-cut', 'Simulate a cable break. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear causes like anchors or earthquakes in plain English. End by asking me which priority I want to choose first.')}
-          >
-            ✂️ Cable Break
-          </button>
-        </div>
-        <div className={`sim-mode-guide sim-mode-guide--${guideTone}`}>
-          <span className="sim-mode-guide-title">{modeGuide.title}</span>
-          <span className="sim-mode-guide-detail"><strong>What you see:</strong> {modeGuide.observe}</span>
-          <span className="sim-mode-guide-detail"><strong>Why it happens:</strong> {modeGuide.cause}</span>
-          <span className="sim-mode-guide-detail"><strong>User impact:</strong> {modeGuide.impact}</span>
-        </div>
-        <div className="sim-globe-legend">
-          <div className="sim-globe-legend-title">🗺️ Globe legend (matches the map)</div>
-          <div className="sim-globe-legend-list">
-            {modeLegendItems.map((item) => (
-              <div key={item.id} className="sim-globe-legend-item">
-                <span className={`sim-globe-legend-symbol sim-globe-legend-symbol--${item.tone}`}>
-                  {item.symbol}
-                </span>
-                <span className="sim-globe-legend-text">{item.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {activeMode !== 'normal' && !canShowCompareControls && (
-          <div className="sim-next-step">
-            👉 Next step: choose one priority option below first.
-          </div>
-        )}
-
-        {/* Compare Mode Toggle */}
-        {canShowCompareControls && (
-          <button
-            className={`compare-toggle ${compareMode ? 'compare-active' : ''}`}
-            disabled={loading}
-            onClick={() => onToggleCompare?.()}
-            title="Show before/after numbers"
-          >
-            📊 {compareMode ? 'Hide' : 'Show'} detailed comparison
-          </button>
-        )}
-      </div>
-
       {/* Compare Panel (center modal) */}
       {compareMode && canShowCompareControls && (
         <div className="compare-modal-overlay" onClick={closeCompareDialog}>
           <div className="compare-modal-dialog" onClick={(event) => event.stopPropagation()}>
             <div className="compare-modal-header">
-              <div className="compare-modal-title">📊 Detailed Comparison</div>
+              <div className="compare-modal-title">Detailed comparison</div>
               <button
                 className="compare-modal-close"
                 onClick={closeCompareDialog}
@@ -466,6 +348,19 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         </div>
       )}
 
+      {canShowCompareControls && (
+        <div className="compare-control-bar">
+          <button
+            className={`compare-toggle ${compareMode ? 'compare-active' : ''}`}
+            disabled={loading}
+            onClick={() => onToggleCompare?.()}
+            title="Show before/after numbers"
+          >
+            {compareMode ? 'Hide' : 'Show'} detailed comparison
+          </button>
+        </div>
+      )}
+
       {/* Chat Messages */}
       <div className="chat-messages" ref={messagesContainerRef}>
         {displayMessages.map(message => (
@@ -477,7 +372,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             <div className="message-content-wrap">
               <div className="message-content">{message.text}</div>
               {message.showGlobeHint && (
-                <div className="globe-watch-card">✨ Watch the globe →</div>
+                <div className="globe-watch-card">Watch the globe for route changes.</div>
               )}
             </div>
           </div>
@@ -488,23 +383,26 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             <div className="message-content-wrap decision-inline-wrap">
               <div className="decision-inline-text">Which one should we prioritize?</div>
               <DecisionCard
-                decision={{
-                  id: activeDecision.mode,
-                  mode: activeDecision.mode,
-                  question: activeDecision.question,
-                  options: activeDecision.options.map((opt) => ({
-                    ...opt,
-                    emoji: opt.label.split(' ')[0],
-                  })),
-                  recommended: activeDecision.recommended,
-                  why: activeDecision.why,
+                  decision={{
+                    id: activeDecision.mode,
+                    mode: activeDecision.mode,
+                    question: activeDecision.question,
+                    options: activeDecision.options.map((opt) => {
+                      const firstToken = opt.label.trim().split(' ')[0] ?? '';
+                      const hasIconPrefix = firstToken.length > 0 && !/^[A-Za-z0-9]+$/.test(firstToken);
+                      return {
+                        ...opt,
+                        label: hasIconPrefix ? opt.label.slice(firstToken.length).trim() : opt.label,
+                        emoji: hasIconPrefix ? firstToken : '',
+                      };
+                    }),
+                    recommended: activeDecision.recommended,
+                    why: activeDecision.why,
                 }}
                 onSelectOption={(optionId) => {
                   const selectedOption = activeDecision.options.find((opt) => opt.id === optionId);
                   if (selectedOption) {
                     const consequence = calculateConsequence(activeDecision.mode, optionId);
-                    const markerCode = getDecisionMarker(activeDecision.mode, optionId);
-                    const markerMeaning = getDecisionMarkerMeaning(activeDecision.mode, optionId);
                     onDecisionApplied?.({
                       mode: activeDecision.mode,
                       selectedOptionId: optionId,
@@ -515,7 +413,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
                     setDecisionAppliedMode(activeDecision.mode);
                     setPendingDecisionMode(null);
                     setActiveDecision(null);
-                    setSelectedDecisionMarker({ code: markerCode, meaning: markerMeaning });
                     void send(
                       buildPriorityFollowupPrompt(
                         activeDecision.mode,
@@ -555,24 +452,24 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
       {/* Suggestion Chips */}
       <div className="chat-suggestions">
-        <div className="chat-suggestions-label">🌍 Focus a city:</div>
+        <div className="chat-suggestions-label">Focus a city</div>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('sgp', "Show me Singapore and tell me why it's important")}>
-          <img src="https://flagcdn.com/20x15/sg.png" width={20} height={15} alt="SG" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <img className="city-chip-flag" src="https://flagcdn.com/20x15/sg.png" width={20} height={15} alt="SG" />
           <span className="city-chip-cc">SG</span> Singapore
         </button>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('tok', "Focus on Tokyo and explain its role in the internet")}>
-          <img src="https://flagcdn.com/20x15/jp.png" width={20} height={15} alt="JP" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <img className="city-chip-flag" src="https://flagcdn.com/20x15/jp.png" width={20} height={15} alt="JP" />
           <span className="city-chip-cc">JP</span> Tokyo
         </button>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('nyc', "Show me New York and explain its transatlantic connections")}>
-          <img src="https://flagcdn.com/20x15/us.png" width={20} height={15} alt="US" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <img className="city-chip-flag" src="https://flagcdn.com/20x15/us.png" width={20} height={15} alt="US" />
           <span className="city-chip-cc">US</span> New York
         </button>
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('fra', "Focus on Frankfurt and tell me about DE-CIX")}>
-          <img src="https://flagcdn.com/20x15/de.png" width={20} height={15} alt="DE" style={{ borderRadius: 2, verticalAlign: 'middle', marginRight: 4, boxShadow: '0 1px 2px rgba(0,0,0,.25)' }} />
+          <img className="city-chip-flag" src="https://flagcdn.com/20x15/de.png" width={20} height={15} alt="DE" />
           <span className="city-chip-cc">DE</span> Frankfurt
         </button>
-        <div className="chat-suggestions-label" style={{ marginTop: '4px' }}>💬 Ask me:</div>
+        <div className="chat-suggestions-label chat-suggestions-label--secondary">Ask me</div>
         {chips.slice(0, 2).map((question, index) => (
           <button
             key={`${question}-${index}`}
@@ -588,7 +485,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       {sessionCapped && (
         <div className="chat-session-cap">
           <button className="session-reset-btn" onClick={startNewSession}>
-            Start a new session →
+            Start a new session
           </button>
         </div>
       )}
@@ -596,7 +493,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         <input
           type="text"
           className="chat-input"
-          placeholder="Ask anything or command the globe..."
+          placeholder="Ask a question about the internet map..."
           value={inputValue}
           disabled={inputDisabled}
           onChange={e => setInputValue(e.target.value)}

@@ -33,12 +33,12 @@ export interface CompareMetrics {
  * Friendly latency label from milliseconds
  */
 function latencyLabel(ms: number): string {
-  if (ms < 50) return 'Ultra-fast ⚡';
-  if (ms < 100) return 'Very fast 🚀';
-  if (ms < 150) return 'Fast ✓';
+  if (ms < 50) return 'Ultra fast';
+  if (ms < 100) return 'Very fast';
+  if (ms < 150) return 'Fast';
   if (ms < 200) return 'Normal';
-  if (ms < 300) return 'Sluggish 🐢';
-  return 'Very slow 🐌';
+  if (ms < 300) return 'Sluggish';
+  return 'Very slow';
 }
 
 /**

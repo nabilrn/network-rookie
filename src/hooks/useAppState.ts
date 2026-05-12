@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 
 export type MissionStatus = 'inactive' | 'active' | 'success' | 'failed';
@@ -13,40 +13,14 @@ export interface Mission {
   completedAt?: number;
 }
 
-// Get initial theme from localStorage or system preference
-const getInitialTheme = (): 'dark' | 'light' => {
-  // Check localStorage first
-  const savedTheme = localStorage.getItem('network-viz-theme');
-  if (savedTheme === 'dark' || savedTheme === 'light') {
-    return savedTheme;
-  }
-
-  // Fall back to system preference
-  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    return 'light';
-  }
-
-  return 'dark';
-};
-
 export function useAppState() {
   const [selectedCity, setSelectedCity] = useState<number | null>(null);
   const [selectedArc, setSelectedArc] = useState<number | null>(null);
   const [simulationMode, setSimulationMode] = useState<string | null>(null);
   const [osiStep, setOsiStep] = useState<number | null>(null);
-  const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [decisionImpact, setDecisionImpact] = useState<DecisionVisualImpact | null>(null);
-
-  // Save theme to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('network-viz-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
 
   const startMission = (mission: Mission) => {
     setActiveMission({ ...mission, status: 'active' });
@@ -81,9 +55,6 @@ export function useAppState() {
     setSimulationMode,
     osiStep,
     setOsiStep,
-    theme,
-    setTheme,
-    toggleTheme,
     activeMission,
     setActiveMission,
     startMission,

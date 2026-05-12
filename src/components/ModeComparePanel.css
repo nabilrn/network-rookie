@@ -1,30 +1,26 @@
 .mode-compare-panel {
-  background: color-mix(in srgb, var(--surface, #100f15) 88%, var(--overlay, rgba(15, 23, 42, 0.6)) 12%);
-  border: 1px solid var(--border-light, rgba(71, 85, 105, 0.4));
-  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: none;
+  border-radius: 10px;
   padding: 14px;
   margin-bottom: 12px;
-  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
 .mode-compare-panel[data-mode='normal'] {
-  border-color: rgba(232, 160, 32, 0.3);
-  background: rgba(232, 160, 32, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
 .mode-compare-panel[data-mode='high-load'] {
-  border-color: rgba(245, 158, 11, 0.4);
-  background: rgba(245, 158, 11, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
 .mode-compare-panel[data-mode='packet-loss'] {
-  border-color: rgba(59, 130, 246, 0.4);
-  background: rgba(59, 130, 246, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
 .mode-compare-panel[data-mode='cable-cut'] {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02), 0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
 .compare-header {
@@ -35,11 +31,11 @@
 }
 
 .compare-title {
-  font-family: var(--mono, 'Courier New', monospace);
-  font-size: 12px;
+  font-family: var(--sans);
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text-bright, #f1f5f9);
+  letter-spacing: 0.01em;
+  color: var(--text-bright);
 }
 
 .compare-badge {
@@ -47,16 +43,15 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--muted, #64748b) 30%, transparent);
-  color: var(--muted, #cbd5e1);
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
 .compare-badge[data-significant='true'] {
-  background: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.2);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-secondary) 66%, var(--surface));
 }
 
 .compare-metrics {
@@ -67,21 +62,20 @@
 }
 
 .metric-card {
-  background: color-mix(in srgb, var(--surface, #100f15) 86%, var(--overlay, rgba(15, 23, 42, 0.5)) 14%);
-  border: 1px solid var(--border-light, rgba(71, 85, 105, 0.25));
-  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: none;
+  border-radius: 8px;
   padding: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .metric-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text-bright, #f1f5f9);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-bright);
   margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .metric-row {
@@ -101,114 +95,88 @@
 
 .value-label {
   font-size: 9px;
-  letter-spacing: 0.5px;
-  color: var(--muted, #cbd5e1);
+  letter-spacing: 0.06em;
+  color: var(--muted);
   text-transform: uppercase;
 }
 
 .value-number {
-  font-family: var(--mono, 'Courier New', monospace);
+  font-family: var(--sans);
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-bright, #f1f5f9);
+  color: var(--text-bright);
 }
 
 .value-number[data-impact='true'] {
-  color: #ef4444;
+  color: var(--text-bright);
 }
 
 .value-number[data-impact='false'] {
-  color: #22c55e;
+  color: var(--text-bright);
 }
 
 .value-subtext {
   font-size: 10px;
-  color: var(--muted, #cbd5e1);
-  line-height: 1.2;
+  color: var(--muted);
+  line-height: 1.25;
 }
 
 .value-subtext[data-stability='excellent'] {
-  color: #22c55e;
+  color: var(--text);
 }
 
 .value-subtext[data-stability='good'] {
-  color: #84cc16;
+  color: var(--text);
 }
 
 .value-subtext[data-stability='fair'] {
-  color: #f59e0b;
+  color: var(--text);
 }
 
 .value-subtext[data-stability='poor'] {
-  color: #ef4444;
+  color: var(--text);
 }
 
 .metric-arrow {
-  color: var(--muted, #cbd5e1);
+  color: var(--muted);
   font-weight: 700;
-  margin: 0 4px;
 }
 
 .metric-delta {
   font-size: 10px;
-  color: var(--muted, #cbd5e1);
-  margin-top: 6px;
+  color: var(--muted);
+  margin-top: 7px;
   padding-top: 6px;
-  border-top: 1px solid var(--border-light, rgba(71, 85, 105, 0.2));
 }
 
 .compare-insight {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 8px;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 6px;
+  padding: 8px 9px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .insight-emoji {
-  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
   flex-shrink: 0;
 }
 
 .insight-text {
   font-size: 11px;
-  line-height: 1.4;
-  color: var(--text, #e2e8f0);
-}
-
-[data-theme="light"] .mode-compare-panel {
-  background: #fffaf0;
-  border-color: rgba(234, 140, 13, 0.28);
-}
-
-[data-theme="light"] .mode-compare-panel[data-mode='high-load'] {
-  background: #fffbeb;
-}
-
-[data-theme="light"] .mode-compare-panel[data-mode='packet-loss'] {
-  background: #f8fbff;
-}
-
-[data-theme="light"] .mode-compare-panel[data-mode='cable-cut'] {
-  background: #fff7f7;
-}
-
-[data-theme="light"] .metric-card {
-  background: #ffffff;
-  border-color: rgba(148, 163, 184, 0.34);
-}
-
-[data-theme="light"] .compare-badge[data-significant='true'] {
-  background: rgba(239, 68, 68, 0.14);
-  color: #b91c1c;
-  box-shadow: none;
-}
-
-[data-theme="light"] .compare-insight {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.26);
+  line-height: 1.45;
+  color: var(--text);
 }
 
 @media (max-width: 640px) {
@@ -223,17 +191,5 @@
 
   .metric-card {
     padding: 8px;
-  }
-
-  .compare-title {
-    font-size: 11px;
-  }
-
-  .metric-row {
-    font-size: 10px;
-  }
-
-  .value-number {
-    font-size: 12px;
   }
 }

@@ -1,7 +1,6 @@
 footer {
   height: 42px;
   background: var(--footer-bg);
-  border-top: 1px solid var(--footer-border);
   display: flex;
   align-items: center;
   gap: 24px;
@@ -35,7 +34,7 @@ footer {
 .fsep {
   width: 1px;
   height: 12px;
-  background: var(--footer-sep);
+  background: transparent;
 }
 
 .fright {

@@ -61,7 +61,7 @@ export function getGlobeLegendItems(
     'high-load': {
       id: 'route-high-load',
       symbol: '━━',
-      text: 'Thicker bright routes mean traffic is getting busier.',
+      text: 'Thicker routes mean traffic is getting busier.',
       tone: 'warn',
     },
     'packet-loss': {
@@ -73,7 +73,7 @@ export function getGlobeLegendItems(
     'cable-cut': {
       id: 'route-cable-cut',
       symbol: '✕',
-      text: 'Red X marks a route that is currently disrupted.',
+      text: 'X marks a route that is currently disrupted.',
       tone: 'danger',
     },
   };

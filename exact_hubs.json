@@ -1,0 +1,128 @@
+[
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "query": "Cloudflare San Jose",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "google-cloud",
+    "name": "Google Cloud",
+    "query": "Google Data Center Jurong West Singapore",
+    "exactLat": 1.3515993,
+    "exactLng": 103.7099558
+  },
+  {
+    "id": "microsoft-azure",
+    "name": "Microsoft Azure",
+    "query": "Microsoft Data Center Dublin",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "aws",
+    "name": "AWS",
+    "query": "Amazon Web Services Data Center Ashburn",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "meta",
+    "name": "Meta",
+    "query": "Meta Data Center DeKalb Chicago",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "akamai",
+    "name": "Akamai",
+    "query": "Akamai Technologies Cambridge Boston",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "fastly",
+    "name": "Fastly",
+    "query": "Fastly San Francisco",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "oracle-cloud",
+    "name": "Oracle Cloud",
+    "query": "Oracle Data Center Phoenix",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "alibaba-cloud",
+    "name": "Alibaba Cloud",
+    "query": "Alibaba Cloud Shanghai",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "tencent-cloud",
+    "name": "Tencent Cloud",
+    "query": "Tencent Cloud Hong Kong",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "equinix",
+    "name": "Equinix",
+    "query": "Equinix AM3 Amsterdam",
+    "exactLat": 52.3546113,
+    "exactLng": 4.9603883
+  },
+  {
+    "id": "digital-realty",
+    "name": "Digital Realty",
+    "query": "Digital Realty Richardson Dallas",
+    "exactLat": 32.9662554,
+    "exactLng": -96.7130975
+  },
+  {
+    "id": "ntt-communications",
+    "name": "NTT Communications",
+    "query": "NTT Data Center Tokyo",
+    "exactLat": 35.6557646,
+    "exactLng": 139.680962
+  },
+  {
+    "id": "lumen",
+    "name": "Lumen",
+    "query": "Lumen Technologies Denver",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "deutsche-telekom",
+    "name": "Deutsche Telekom",
+    "query": "Deutsche Telekom Frankfurt",
+    "exactLat": 52.3620087,
+    "exactLng": 14.5281839
+  },
+  {
+    "id": "arelion",
+    "name": "Arelion",
+    "query": "Arelion Stockholm",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "zayo",
+    "name": "Zayo",
+    "query": "Zayo Group Chicago",
+    "exactLat": null,
+    "exactLng": null
+  },
+  {
+    "id": "starlink",
+    "name": "Starlink",
+    "query": "SpaceX Hawthorne Los Angeles",
+    "exactLat": 33.920469,
+    "exactLng": -118.3279411
+  }
+]

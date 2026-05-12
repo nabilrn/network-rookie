@@ -27,25 +27,18 @@ export const MissionCard: React.FC<MissionCardProps> = ({
   const flagImg = (countryCode: string) =>
     countryCode ? (
       <img
+        className="route-flag-img"
         src={`https://flagcdn.com/24x18/${countryCode.toLowerCase()}.png`}
         width={24}
         height={18}
         alt={countryCode}
-        style={{ borderRadius: 2, verticalAlign: 'middle', boxShadow: '0 1px 3px rgba(0,0,0,.2)', display: 'inline-block' }}
       />
-    ) : <span style={{ fontSize: 18 }}>🌐</span>;
-
-  const statusColor = {
-    inactive: '#64748b',
-    active: '#3b82f6',
-    success: '#22c55e',
-    failed: '#ef4444',
-  }[mission.status];
+    ) : <span className="route-fallback">NET</span>;
 
   const statusLabel = {
     inactive: 'Not started',
     active: 'In progress',
-    success: 'Completed! 🎉',
+    success: 'Completed',
     failed: 'Failed',
   }[mission.status];
 
@@ -54,7 +47,7 @@ export const MissionCard: React.FC<MissionCardProps> = ({
       <div className="mission-header">
         <div className="mission-title-section">
           <h3 className="mission-title">{mission.title}</h3>
-          <span className="mission-status" style={{ color: statusColor }}>
+          <span className="mission-status" data-status={mission.status}>
             {statusLabel}
           </span>
         </div>
@@ -79,13 +72,13 @@ export const MissionCard: React.FC<MissionCardProps> = ({
       <div className="mission-actions">
         {mission.status === 'inactive' && (
           <button className="mission-btn btn-primary" onClick={onStart}>
-            🚀 Start Mission
+            Start mission
           </button>
         )}
         {mission.status === 'active' && (
           <>
             <button className="mission-btn btn-success" onClick={onComplete}>
-              ✓ Complete Mission
+              Complete mission
             </button>
             <button className="mission-btn btn-secondary" onClick={onReset}>
               Reset

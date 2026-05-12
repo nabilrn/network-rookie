@@ -6,10 +6,10 @@ interface SimToolbarProps {
 }
 
 const MODES = [
-  { id: 'normal', label: '🌐 Normal' },
-  { id: 'high-load', label: '🚦 Rush Hour' },
-  { id: 'packet-loss', label: '📶 Bad Signal' },
-  { id: 'cable-cut', label: '✂️ Cable Breaks' },
+  { id: 'normal', label: 'Normal' },
+  { id: 'high-load', label: 'Rush Hour' },
+  { id: 'packet-loss', label: 'Bad Signal' },
+  { id: 'cable-cut', label: 'Cable Breaks' },
 ];
 
 const MODE_DESCRIPTIONS: Record<string, string> = {

@@ -1,422 +1,228 @@
-\# Network Rookie — GitHub Copilot Instructions
+# Network Rookie — GitHub Copilot Instructions
 
+## Product Positioning
 
+Network Rookie is an interactive educational visualization tool that explains how the global internet infrastructure works to complete beginners.
 
-\## Project Overview
+The experience should feel:
+- calm
+- elegant
+- educational
+- trustworthy
+- modern
+- exhibition-ready
 
-Network Rookie is a React + Vite + TypeScript interactive exhibition tool
+The UI aesthetic is inspired by:
+- Linear
+- Vercel
+- modern Apple developer tooling
 
-that visualizes the global internet infrastructure for complete beginners.
+NOT:
+- cyberpunk dashboards
+- gamer UI
+- neon hacker aesthetics
+- AI-generated visual clutter
 
-Target audience: zero technical background, walk-up exhibition visitors.
+---
 
+## Visual Philosophy
 
+### Core Principles
 
-\## Tech Stack
+1. Minimal first
+2. Monochrome UI
+3. Typography-driven hierarchy
+4. Reduce visual noise aggressively
+5. Calm motion only
+6. Educational readability over visual spectacle
+7. Globe is the hero, UI is supporting chrome
 
-\- React 18 + Vite + TypeScript
+---
 
-\- globe.gl (3D globe rendering)
+## Globe Direction
 
-\- Gemini AI (google AI studio, called direct from frontend, no backend)
+The globe must use realistic earth-inspired coloring.
 
-\- Netlify (static deploy)
+### Globe Color Rules
 
-\- pnpm as package manager
+Oceans:
+- deep desaturated blue
 
+Forest / island regions:
+- muted green-blue
 
+Desert regions:
+- warm sand tones
 
-\## Core Philosophy
+Polar regions:
+- cold desaturated white-blue
 
-NEVER use technical jargon without an immediate plain-English explanation.
+Avoid:
+- neon continents
+- glowing cyberpunk surfaces
+- over-saturated atmosphere effects
 
-ALWAYS prefer human analogies over technical accuracy.
+Dark/light mode changes surrounding UI chrome only.
+The globe itself should remain visually believable.
 
-ALWAYS show/animate before explaining in text.
+---
 
-The experience must be understandable within 30 seconds by a complete beginner.
+## Route Visualization
 
+### Rules
 
+- Thin elegant arcs
+- Subtle pulse motion
+- Restrained opacity
+- Minimal glow
+- Calm animation timing
 
-\## Project Structure
+Avoid:
+- chaotic particles
+- thick neon lines
+- aggressive flashing
+- visual spam
 
-src/
+Packet visualization should feel informative, not decorative.
 
-├── App.tsx                    # Root, holds all state via useAppState
+---
 
-├── hooks/
+## Typography
 
-│   ├── useAppState.ts         # Global state: selectedCity, selectedArc,
+Primary typography style:
+- modern sans-serif
+- clean hierarchy
+- high readability
 
-│   │                          # simulationMode, osiStep, theme
+Preferred direction:
+- Inter
+- Geist
+- SF Pro style
 
-│   └── useGeminiChat.ts       # Gemini API hook (JSON payload parser + action support)
+Mono fonts are allowed only for tiny telemetry values.
 
-├── components/
+Avoid:
+- terminal overload
+- excessive uppercase
+- tiny unreadable labels
 
-│   ├── BrowserChrome.tsx      # Top bar, theme toggle, DEV badge
+---
 
-│   ├── GlobeSection.tsx       # Globe + HUD + city dialog + PacketDots
+## Theme Architecture
 
-│   ├── HUD.tsx                # Stats overlay on globe
+The theme system must remain unified and minimal.
 
-│   ├── SimToolbar.tsx         # Legacy; simulation controls currently rendered in ChatInterface
+Avoid maintaining multiple overlapping token systems.
 
-│   ├── RightPanel.tsx         # Right sidebar container (AI chat + action router)
+Preferred token structure:
+- background
+- surface
+- surface-secondary
+- border
+- text-primary
+- text-secondary
+- accent
 
-│   ├── SelectionDrawer.tsx    # Shows city/arc info when selected
+Avoid excessive semantic color tokens.
 
-│   ├── OSICards.tsx           # Journey steps (NOT OSI layers anymore)
+---
 
-│   ├── ChatInterface.tsx      # AI chat UI
+## Dark Mode
 
-│   ├── InactivityWatcher.tsx  # Auto-reset after 3 min
+Dark mode should feel:
+- soft
+- premium
+- readable
+- restrained
 
-│   └── OfflineBanner.tsx      # Shows when navigator.onLine = false
+Avoid:
+- orange glow spam
+- cyberpunk visuals
+- gaming aesthetics
 
-└── data/
+---
 
-&#x20;   └── network.ts             # CITIES, CONNECTIONS, CHIP\_QUESTIONS
+## Light Mode
 
+Light mode should feel:
+- editorial
+- spacious
+- clean
+- calm
 
+Avoid:
+- excessive gray boxes
+- heavy shadows
+- saturated UI accents
 
-\## State Architecture
+---
 
-Global state lives in useAppState hook, lifted to App.tsx.
+## UX Philosophy
 
-Props flow DOWN: App → GlobeSection/RightPanel → children.
+Always optimize for:
+- instant comprehension
+- beginner friendliness
+- visual clarity
+- calm interaction
 
-Callbacks flow UP: onCitySelect, onArcSelect, onModeChange.
+Never overwhelm users with:
+- too many animations
+- too many colors
+- too many labels
+- too much telemetry
 
-GlobeSection also maintains internal STATE object for globe.gl render().
+---
 
-Both must stay in sync — when globe fires onCitySelect(idx), 
+## Motion Rules
 
-App.tsx updates React state, which flows back down as props.
+Animation should be:
+- smooth
+- slow
+- intentional
+- educational
 
+Avoid:
+- jitter
+- arcade-like movement
+- chaotic transitions
 
+---
 
-\## Data Shape
+## Component Priorities
 
+The globe is always the primary visual focus.
 
+UI chrome should remain secondary.
 
-\### CITIES
+Priority hierarchy:
+1. Globe
+2. Route visualization
+3. Context panels
+4. Controls
+5. Telemetry/HUD
 
-{
+---
 
-&#x20; id: string           // 'sgp', 'tok', 'lon', etc.
+## Code Rules
 
-&#x20; name: string         // 'Singapore'
+- Preserve existing architecture
+- Preserve simulation logic
+- Preserve AI integration
+- Refactor visuals only
+- Avoid unnecessary dependencies
+- Use CSS variables consistently
+- Remove dead theme tokens when possible
 
-&#x20; flag: string         // '🇸🇬'
+---
 
-&#x20; lat: number
+## What NOT to Do
 
-&#x20; lng: number
+Never:
+- add cyberpunk effects
+- add neon glows everywhere
+- add emoji-heavy UI
+- add decorative noise
+- create fake sci-fi interfaces
+- prioritize aesthetics over readability
 
-&#x20; region: string       // 'Southeast Asia'
-
-&#x20; hubTier: number      // 1 = Major Hub, 2 = Regional Hub
-
-&#x20; fact: string         // technical fact (for AI context)
-
-&#x20; friendlyFact: string // beginner-friendly one-liner
-
-&#x20; heroStat: string     // e.g. "Connects to 6 continents"
-
-}
-
-
-
-\### CONNECTIONS
-
-{
-
-&#x20; from: string         // city id
-
-&#x20; to: string           // city id
-
-&#x20; latency: number      // ms
-
-&#x20; cable: string        // 'FASTER', 'SEA-ME-WE 4', etc.
-
-&#x20; type: string         // 'Subsea cable' or 'Land cable'
-
-&#x20; bandwidth: string    // '60 Tbps'
-
-&#x20; distanceKm: number   // approximate cable distance
-
-&#x20; depthM: number       // average ocean depth in meters
-
-&#x20; blinkComparison: string  // human latency analogy
-
-&#x20; funFact: string      // one interesting fact about this cable
-
-}
-
-
-
-\### CHIP\_QUESTIONS
-
-Record<cityId | 'default', string\[]>
-
-Beginner-friendly questions, no jargon.
-
-Each city has 3 questions. Default fallback for unrecognized city.
-
-
-
-\## Gemini API
-
-
-
-\### Setup
-
-API key from environment: import.meta.env.VITE\_GEMINI\_API\_KEY
-
-Endpoint template: https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key=KEY
-
-Default model comes from VITE_GEMINI_MODEL (fallback to gemini-flash-lite-latest).
-
-Called directly from frontend — no backend proxy needed.
-
-Free tier limits: 15 req/min, 1500 req/day — sufficient for exhibition.
-
-
-
-\### Message Format
-
-{
-
-&#x20; role: 'user' | 'model'
-
-&#x20; parts: \[{ text: string }]
-
-}
-
-
-
-\### System Instruction
-
-Separate from messages array:
-
-{ system\_instruction: { parts: \[{ text: systemPrompt }] } }
-
-
-
-\### Response Types
-
-Gemini ALWAYS returns valid JSON. Parse response text as JSON.
-
-Five types:
-
-
-
-1\. journey — user wants to simulate data travel
-
-{
-
-&#x20; type: 'journey',
-
-&#x20; fromId: string,      // city id
-
-&#x20; toId: string,        // city id  
-
-&#x20; steps: \[
-
-&#x20;   { emoji: string, title: string, body: string }  // always 4 steps
-
-&#x20; ],
-
-&#x20; story: string        // 2 sentences for chat display
-
-}
-
-
-
-2\. explain — user asks a question
-
-{
-
-&#x20; type: 'explain',
-
-&#x20; content: string,         // max 80 words, plain English
-
-&#x20; analogy: string,         // one-sentence real-world comparison
-
-&#x20; highlightCityId?: string // optional city to highlight
-
-}
-
-
-
-3\. scenario — user asks about simulation modes
-
-{
-
-&#x20; type: 'scenario',
-
-&#x20; mode: 'high-load' | 'packet-loss' | 'cable-cut',
-
-&#x20; story: string            // plain English narration
-
-}
-
-
-
-4\. fact — idle fun fact
-
-{
-
-&#x20; type: 'fact',
-
-&#x20; emoji: string,
-
-&#x20; content: string          // max 30 words
-
-}
-
-
-
-5\. action — trigger direct UI action
-
-{
-
-&#x20; type: 'action',
-
-&#x20; action: 'SET_MODE' | 'FOCUS_CITY',
-
-&#x20; payload: string,          // mode id or city id/alias
-
-&#x20; message: string           // plain English narration
-
-}
-
-
-
-\## Component Responsibilities
-
-
-
-\### ChatInterface.tsx
-
-\- Renders message history, input, chips, typing indicator
-
-\- Uses useGeminiChat hook
-
-\- Fires onJourney(payload) when response type === 'journey'
-
-\- Fires onScenario(mode) when response type === 'scenario'
-
-\- Fires onAction(action, payload) when response type === 'action'
-
-\- Pre-populates first message as AI welcome (not from API)
-
-\- Chips come from CHIP\_QUESTIONS keyed by selected city id
-
-\- Country focus chips should trigger onAction('FOCUS\_CITY', cityId) immediately before sending AI prompt
-
-
-
-\### SelectionDrawer.tsx  
-
-\- Shows nothing when selectedCity and selectedArc are both null
-
-\- City selected: flag, name, hub tier label, friendlyFact, heroStat
-
-\- Arc selected: 4-step journey cards (animate in sequence)
-
-\- Reads data from CITIES/CONNECTIONS arrays directly — no API call
-
-\- Hub tier display: 1 = "Major Internet Hub 🌐", 2 = "Regional Hub"
-
-\- Latency display: always append blinkComparison
-
-\- Cable type display: 'Subsea cable' → "Underwater cable 🌊"
-
-&#x20;                     'Land cable'   → "Underground cable 🌍"
-
-
-
-\### GlobeSection.tsx (ref interface)
-
-Exposes via useImperativeHandle:
-
-\- globeRef — direct globe.gl instance access
-
-\- triggerJourney(fromId, toId) — highlights route, flies camera
-
-\- triggerReset() — resets globe to default auto-rotating state
-
-
-
-\### Simulation controls (current UI)
-
-Simulation controls are rendered inside ChatInterface as chips:
-
-\- 'normal'       → "🌐 Normal"
-
-\- 'high-load'    → "🚦 Rush Hour"  
-
-\- 'packet-loss'  → "📶 Packet Loss"
-
-\- 'cable-cut'    → "✂️ Cable Break"
-
-
-
-\## UX Rules
-
-1\. Right panel is always AI chat + simulation controls (no empty/city/arc drawer state in current implementation)
-
-2\. Globe hint overlay shows until first city tap, then never again
-
-3\. City tooltips show flag + name + friendlyFact only (no lat/lng/load)
-
-4\. City detail dialog appears on globe when city selected
-
-5\. Closing city dialog must clear selection and restore auto-rotate
-
-6\. All error messages in plain English, no HTTP codes shown to user
-
-7\. Inactivity reset at 3 min — countdown overlay at 2.5 min
-
-8\. Offline banner appears automatically, no user action needed
-
-9\. DEV MODE badge must be removed before production deploy
-
-
-
-\## Code Style
-
-\- TypeScript strict mode
-
-\- Functional components only, no class components  
-
-\- useEffect cleanup always included
-
-\- No any types except globe.gl internals (globe.gl has no TS types)
-
-\- CSS variables for all colors (defined in theme.css)
-
-\- No inline styles except dynamic values that depend on JS state
-
-\- Component files include CSS import from same-named .css file
-
-
-
-\## What NOT to Do
-
-\- Never call a backend API — all data is static from network.ts
-
-\- Never store API key in code — always use import.meta.env
-
-\- Never use OSI layer terminology in UI copy facing visitors
-
-\- Never show raw latency without a human comparison
-
-\- Never show lat/lng coordinates to visitors
-
-\- Never use "packet", "protocol", "bandwidth" without explanation
-
-\- Never add new npm dependencies without checking bundle size impact
-
+The interface should feel like a professional educational product.

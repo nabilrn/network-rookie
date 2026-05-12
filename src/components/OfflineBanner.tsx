@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
 import './OfflineBanner.css';
 
-interface OfflineBannerProps {
-  theme: 'dark' | 'light';
-}
-
-export function OfflineBanner({ theme }: OfflineBannerProps) {
+export function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
@@ -24,7 +20,7 @@ export function OfflineBanner({ theme }: OfflineBannerProps) {
   if (!isOffline) return null;
 
   return (
-    <div className={`offline-banner ${theme}`}>
+    <div className="offline-banner dark">
       <div className="offline-content">
         <svg className="offline-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
           <path

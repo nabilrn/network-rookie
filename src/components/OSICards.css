@@ -1,15 +1,16 @@
 .card {
   background: var(--overlay);
-  border: 1px solid var(--border-light);
+  border: none;
   border-radius: 7px;
   padding: 11px 13px;
   display: flex;
   align-items: flex-start;
   gap: 11px;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s, transform 0.18s;
+  transition: background 0.2s, transform 0.18s, box-shadow 0.2s;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
 }
 
 .card::before {
@@ -31,13 +32,12 @@
 .cs2::before { background: var(--steel); opacity: 0.7; }
 
 .card:hover {
-  border-color: color-mix(in srgb, var(--amber) 20%, transparent);
   background: var(--overlay-hover);
   transform: translateX(2px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
 }
 
 .card.active {
-  border-color: var(--border-strong);
   background: var(--card-active-bg);
   box-shadow: var(--card-active-shadow);
 }
@@ -51,6 +51,7 @@
   height: 34px;
   flex-shrink: 0;
   margin-top: 1px;
+  filter: grayscale(100%);
 }
 
 .card-body {
@@ -114,7 +115,6 @@
   margin-top: 12px;
   padding-top: 8px;
   padding-bottom: 4px;
-  border-top: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
@@ -124,15 +124,15 @@
   letter-spacing: 0.05em;
   color: var(--amber);
   background: transparent;
-  border: 1px solid color-mix(in srgb, var(--amber) 20%, transparent);
   border-radius: 4px;
   padding: 5px 10px;
   cursor: pointer;
   transition: all 150ms ease;
   text-transform: lowercase;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
 .osi-btn:hover {
-  border-color: var(--amber);
   background: color-mix(in srgb, var(--amber) 5%, transparent);
 }

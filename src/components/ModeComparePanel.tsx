@@ -22,11 +22,13 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
 
   const isNormalMode = mode === 'normal';
   const hasSignificantImpact = Math.abs(latencyChangePercent) > 5;
+  const latencyTrend = latencyChangePercent > 0 ? '+' : latencyChangePercent < 0 ? '-' : '±';
+  const distanceTrend = distanceChangePercent > 0 ? '+' : distanceChangePercent < 0 ? '-' : '±';
 
   return (
     <div className="mode-compare-panel" data-mode={mode}>
       <div className="compare-header">
-        <span className="compare-title">📊 Normal vs Current Mode</span>
+        <span className="compare-title">Normal vs current mode</span>
         <span className="compare-badge" data-significant={hasSignificantImpact && !isNormalMode}>
           {isNormalMode ? 'Baseline' : 'Impact'}
         </span>
@@ -35,7 +37,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
       <div className="compare-metrics">
         {/* Latency Card */}
         <div className="metric-card">
-          <div className="metric-label">⏱ Latency</div>
+          <div className="metric-label">Latency</div>
           <div className="metric-row">
             <div className="metric-value-pair">
               <span className="value-label">Normal:</span>
@@ -53,7 +55,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
           </div>
           {!isNormalMode && (
             <div className="metric-delta">
-              {latencyChangePercent > 0 ? '📈' : '📉'} {Math.abs(latencyChangePercent)}% change
+              {latencyTrend}{Math.abs(latencyChangePercent)}% change
               ({metrics.delta.latencyDelta > 0 ? '+' : ''}{metrics.delta.latencyDelta}ms)
             </div>
           )}
@@ -61,7 +63,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
 
         {/* Distance Card */}
         <div className="metric-card">
-          <div className="metric-label">🛣 Route Distance</div>
+          <div className="metric-label">Route distance</div>
           <div className="metric-row">
             <div className="metric-value-pair">
               <span className="value-label">Normal:</span>
@@ -77,7 +79,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
           </div>
           {!isNormalMode && (
             <div className="metric-delta">
-              {distanceChangePercent > 0 ? '📈' : '📉'} {Math.abs(distanceChangePercent)}% change
+              {distanceTrend}{Math.abs(distanceChangePercent)}% change
               ({metrics.delta.distanceDelta > 0 ? '+' : ''}{metrics.delta.distanceDelta}km)
             </div>
           )}
@@ -85,7 +87,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
 
         {/* Retry/Stability Card */}
         <div className="metric-card">
-          <div className="metric-label">🔄 Data Retries & Stability</div>
+          <div className="metric-label">Data retries and stability</div>
           <div className="metric-row">
             <div className="metric-value-pair">
               <span className="value-label">Normal:</span>
@@ -110,7 +112,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
           </div>
           {!isNormalMode && (
             <div className="metric-delta">
-              {metrics.delta.retryDelta > 0 ? '📈' : '='} Retry overhead: +{metrics.delta.retryDelta}%
+              {metrics.delta.retryDelta > 0 ? '+' : ''}{metrics.delta.retryDelta}% retry overhead
               | {metrics.delta.stabilityDelta}
             </div>
           )}
@@ -119,7 +121,7 @@ export const ModeComparePanel: React.FC<ModeComparePanelProps> = ({ mode, isVisi
 
       {!isNormalMode && hasSignificantImpact && (
         <div className="compare-insight">
-          <span className="insight-emoji">💡</span>
+          <span className="insight-emoji" aria-hidden="true">i</span>
           <span className="insight-text">
             {mode === 'high-load'
               ? 'During peak traffic, expect slower speeds as routes become congested.'

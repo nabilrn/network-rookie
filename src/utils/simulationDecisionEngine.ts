@@ -56,13 +56,13 @@ export function getDecisionForMode(mode: 'high-load' | 'packet-loss' | 'cable-cu
       options: [
         {
           id: 'video-priority',
-          label: '🎬 Prioritize Video',
+          label: 'Prioritize video',
           description: 'Give video streams maximum bandwidth and low latency',
           emoji: '🎬',
         },
         {
           id: 'fair-distribution',
-          label: '⚖️ Fair Distribution',
+          label: 'Fair distribution',
           description: 'Divide bandwidth equally among all services',
           emoji: '⚖️',
         },
@@ -77,13 +77,13 @@ export function getDecisionForMode(mode: 'high-load' | 'packet-loss' | 'cable-cu
       options: [
         {
           id: 'retry-aggressive',
-          label: '🔄 Retry Aggressively',
+          label: 'Retry aggressively',
           description: 'Resend lost packets multiple times until they arrive',
           emoji: '🔄',
         },
         {
           id: 'reduce-quality',
-          label: '📉 Reduce Quality',
+          label: 'Reduce quality',
           description: 'Accept some data loss; send lower quality streams',
           emoji: '📉',
         },
@@ -98,13 +98,13 @@ export function getDecisionForMode(mode: 'high-load' | 'packet-loss' | 'cable-cu
       options: [
         {
           id: 'shortest-path',
-          label: '⚡ Shortest Path',
+          label: 'Shortest path',
           description: 'Reroute via the geographically shortest alternative route',
           emoji: '⚡',
         },
         {
           id: 'most-stable',
-          label: '🛡️ Most Stable',
+          label: 'Most stable',
           description: 'Use routes with better redundancy and fewer recent incidents',
           emoji: '🛡️',
         },

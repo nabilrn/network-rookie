@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { BrowserChrome } from '../components/BrowserChrome';
@@ -19,8 +19,6 @@ export default function App() {
     setSimulationMode,
     osiStep,
     setOsiStep,
-    theme,
-    toggleTheme,
     activeMission,
     startMission,
     completeMission,
@@ -34,10 +32,6 @@ export default function App() {
 
   const globeSectionRef = useRef<GlobeSectionRef>(null);
   const rightPanelRef = useRef<RightPanelRef>(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
 
   const handleChatReset = () => {
     rightPanelRef.current?.resetChat();
@@ -69,14 +63,21 @@ export default function App() {
     setDecisionImpact(null);
   };
 
+  const handleSimulationControlSelect = (mode: string) => {
+    if (rightPanelRef.current) {
+      rightPanelRef.current.applySimulationMode(mode);
+      return;
+    }
+    handleModeChange(mode);
+  };
+
   return (
     <>
-      <OfflineBanner theme={theme} />
-      <BrowserChrome theme={theme} toggleTheme={toggleTheme} />
+      <OfflineBanner />
+      <BrowserChrome />
       <div className="workspace">
         <GlobeSection
           ref={globeSectionRef}
-          theme={theme}
           selectedCity={selectedCity}
           selectedArc={selectedArc}
           simulationMode={simulationMode}
@@ -85,6 +86,7 @@ export default function App() {
           onCitySelect={setSelectedCity}
           onArcSelect={setSelectedArc}
           onModeChange={handleModeChange}
+          onSimulationSelect={handleSimulationControlSelect}
         />
         <RightPanel
           ref={rightPanelRef}
@@ -110,7 +112,6 @@ export default function App() {
         globeSectionRef={globeSectionRef}
         onChatReset={handleChatReset}
         onReset={handleSessionReset}
-        theme={theme}
       />
     </>
   );

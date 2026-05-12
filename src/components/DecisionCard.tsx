@@ -23,7 +23,7 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
   return (
     <div className="decision-card">
       <div className="decision-header">
-        <div className="decision-mode-badge">🎯 Step 2: Choose Priority</div>
+        <div className="decision-mode-badge">Step 2: Choose priority</div>
         <h3 className="decision-question">{decision.question}</h3>
       </div>
 
@@ -42,12 +42,11 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
                   : 'Already selected'
             }
           >
-            <div className="option-emoji">{option.emoji}</div>
             <div className="option-content">
               <div className="option-label">{option.label}</div>
               <div className="option-description">{option.description}</div>
               {option.id === decision.recommended && selectedOptionId === null && (
-                <div className="option-hint">✨ Recommended for a more balanced experience</div>
+                <div className="option-hint">Recommended for a more balanced experience</div>
               )}
             </div>
           </button>
@@ -59,7 +58,7 @@ export const DecisionCard: React.FC<DecisionCardProps> = ({ decision, onSelectOp
           <p className="decision-hint">
             <strong>Why this matters:</strong> {decision.why}
           </p>
-          <p className="decision-loading">{isLoading ? 'Checking impact...' : 'Applied on globe →'}</p>
+          <p className="decision-loading">{isLoading ? 'Checking impact...' : 'Applied on globe.'}</p>
         </div>
       )}
     </div>

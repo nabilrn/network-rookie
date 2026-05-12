@@ -27,6 +27,7 @@ interface RightPanelProps {
 
 export interface RightPanelRef {
   resetChat: () => void;
+  applySimulationMode: (mode: string) => void;
 }
 
 export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
@@ -36,6 +37,9 @@ export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
     useImperativeHandle(ref, () => ({
       resetChat: () => {
         chatRef.current?.reset();
+      },
+      applySimulationMode: (mode: string) => {
+        chatRef.current?.applySimulationMode(mode);
       },
     }));
 
@@ -64,12 +68,11 @@ export const RightPanel = forwardRef<RightPanelRef, RightPanelProps>(
         {/* Header */}
         <div className="panel-mode-header">
           <div className="panel-brand">
-            <span className="brand-icon">🤖</span>
-            <span className="brand-text">AI NETWORK COPILOT</span>
+            <span className="brand-text">AI network guide</span>
           </div>
           <div className="status-badge">
             <span className="status-dot" />
-            <span className="status-label">ACTIVE</span>
+            <span className="status-label">Online</span>
           </div>
         </div>
 

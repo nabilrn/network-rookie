@@ -6,13 +6,12 @@ interface InactivityWatcherProps {
   globeSectionRef: React.RefObject<GlobeSectionRef | null>;
   onChatReset?: () => void;
   onReset?: () => void;
-  theme: 'dark' | 'light';
 }
 
 const INACTIVITY_TIMEOUT = 2.5 * 60 * 1000; // 2.5 minutes
 const COUNTDOWN_DURATION = 30; // 30 seconds
 
-export function InactivityWatcher({ globeSectionRef, onChatReset, onReset, theme }: InactivityWatcherProps) {
+export function InactivityWatcher({ globeSectionRef, onChatReset, onReset }: InactivityWatcherProps) {
   const [showOverlay, setShowOverlay] = useState(false);
   const [countdown, setCountdown] = useState(COUNTDOWN_DURATION);
   const lastActivityRef = useRef<number>(Date.now());
@@ -133,7 +132,7 @@ export function InactivityWatcher({ globeSectionRef, onChatReset, onReset, theme
   if (!showOverlay) return null;
 
   return (
-    <div className={`inactivity-overlay ${theme}`}>
+    <div className="inactivity-overlay dark">
       <div className="inactivity-content">
         <div className="countdown-number">{countdown}</div>
         <div className="countdown-label">Resetting session…</div>

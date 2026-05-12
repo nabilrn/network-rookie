@@ -7,7 +7,6 @@ interface SparkBar {
   delay: number;
   duration: number;
   opacity: number;
-  color: string;
 }
 
 interface AnimatedValue {
@@ -41,12 +40,8 @@ export function HUD() {
     const bars = heights.map((h, i) => {
       const delay = i * 0.12;
       const duration = 2.2 + (i % 3) * 0.6;
-      const opacity = 0.25 + h / 220;
-      let color = 'var(--amber)';
-      if (i % 3 === 1) color = 'var(--teal)';
-      else if (i % 3 === 2) color = 'var(--steel)';
-
-      return { h, delay, duration, opacity, color };
+      const opacity = 0.2 + h / 280;
+      return { h, delay, duration, opacity };
     });
     setSparkBars(bars);
   }, []);
@@ -112,20 +107,10 @@ export function HUD() {
 
   return (
     <div className="hud">
-      <div className="hud-corner tl"></div>
-      <div className="hud-corner tr"></div>
-      <div className="hud-corner bl"></div>
-      <div className="hud-corner br"></div>
-
-      <div className="hud-title">
-        <h1>NETWORK ROOKIE</h1>
-        <div className="sub">// interactive internet infrastructure explorer</div>
-      </div>
-
       <div className="hud-stats">
         <div className="stat-row">
-          <div className="s-dot a"></div>
-          <span className="s-label">PACKET STREAM</span>
+            <div className="s-dot a"></div>
+            <span className="s-label">Live traffic</span>
           <span className="s-val a animated-value">
             <span key={`prev-${streamCount.key}`} className="value-exit">
               {typeof streamCount.previous === 'number' ? streamCount.previous.toLocaleString() : streamCount.previous}
@@ -136,8 +121,8 @@ export function HUD() {
           </span>
         </div>
         <div className="stat-row">
-          <div className="s-dot t"></div>
-          <span className="s-label">ACTIVE ROUTES</span>
+            <div className="s-dot t"></div>
+            <span className="s-label">Active routes</span>
           <span className="s-val t animated-value">
             <span key={`prev-${activeRoutes.key}`} className="value-exit">
               {activeRoutes.previous}
@@ -148,8 +133,8 @@ export function HUD() {
           </span>
         </div>
         <div className="stat-row">
-          <div className="s-dot s"></div>
-          <span className="s-label">SIMULATED LATENCY</span>
+            <div className="s-dot s"></div>
+            <span className="s-label">Current latency</span>
           <span className="s-val s animated-value">
             <span key={`prev-${latency.key}`} className="value-exit">
               {latency.previous}
@@ -163,7 +148,7 @@ export function HUD() {
 
       <div className="hud-mini">
         <div className="mini-card">
-          <div>THROUGHPUT / 30s</div>
+          <div>Throughput / 30s</div>
           <div className="mini-sparkline">
             {sparkBars.map((bar, i) => (
               <div
@@ -174,19 +159,16 @@ export function HUD() {
                   animationDelay: `${bar.delay}s`,
                   animationDuration: `${bar.duration}s`,
                   opacity: bar.opacity,
-                  background: bar.color,
                 }}
               ></div>
             ))}
           </div>
         </div>
         <div className="mini-card">
-          <div>PACKET LOSS</div>
+          <div>Retry rate</div>
           <div className="val">0.003%</div>
         </div>
       </div>
-
-      <div className="scan-line"></div>
     </div>
   );
 }

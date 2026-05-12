@@ -9,8 +9,8 @@
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--offline-border);
   animation: bannerSlideDown 0.3s ease-out;
+  box-shadow: inset 0 -1px 0 var(--offline-border);
 }
 
 .offline-banner.dark {
@@ -18,10 +18,7 @@
   color: var(--offline-text-dark);
 }
 
-.offline-banner.light {
-  background: var(--offline-bg-light);
-  color: var(--offline-text-light);
-}
+
 
 @keyframes bannerSlideDown {
   from {

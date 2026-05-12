@@ -1,15 +1,13 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useMemo } from 'react';
 import Globe from 'globe.gl';
 import * as topojson from 'topojson-client';
-import { CITIES, CONNS, CONNECTIONS, ARC_COLORS } from '../data/network';
+import { CITIES, CONNS, CONNECTIONS, ARC_COLORS, COMPANY_HUBS } from '../data/network';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { getDecisionMarker, getGlobeLegendItems } from '../utils/globeLegend';
-import { HUD } from './HUD';
 import { PacketDots } from './PacketDots';
 import './GlobeSection.css';
 
 interface GlobeSectionProps {
-  theme: 'dark' | 'light';
   selectedCity: number | null;
   selectedArc: number | null;
   simulationMode: string | null;
@@ -18,6 +16,7 @@ interface GlobeSectionProps {
   onCitySelect: (index: number | null) => void;
   onArcSelect: (index: number | null) => void;
   onModeChange: (mode: string) => void;
+  onSimulationSelect?: (mode: string) => void;
 }
 
 export interface GlobeSectionRef {
@@ -51,9 +50,29 @@ const hexToRgba = (hex: string, opacity: number): string => {
 
 const CITY_DIALOG_GAP = 18;
 const CITY_DIALOG_EDGE_PADDING = 16;
+const INITIAL_VISIBLE_CITY_COUNT = 30;
+const INITIAL_PRIORITY_CITY_IDS = ['sgp', 'tok', 'lon', 'nyc', 'lax', 'syd', 'mum', 'dxb', 'fra', 'sao'];
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
+
+const toRadians = (deg: number): number => (deg * Math.PI) / 180;
+
+const haversineKm = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number => {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+};
 
 type CityDialogPosition = {
   left: number;
@@ -61,58 +80,93 @@ type CityDialogPosition = {
   side: 'left' | 'right';
 };
 
-// Theme-specific colors for the globe
-const getGlobeColors = (theme: 'dark' | 'light') => {
-  if (theme === 'light') {
-    return {
-      atmosphere: '#93c5fd',
-      surface: '#bfdbfe',
-      specular: '#dbeafe',
-      emissive: '#f0f9ff',
-      emissiveIntensity: 0.2,
-      countryCap: '#60a5fa',
-      countrySide: 'rgba(147, 197, 253, 0.2)',
-      countryStroke: 'rgba(37, 99, 235, 0.65)', // Darker blue for visibility
-    };
-  }
+// Satellite texture (NASA Blue Marble)
+const GLOBE_TEXTURE = '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+const GLOBE_BUMP_MAP = '//unpkg.com/three-globe/example/img/earth-topology.png';
 
-  return {
-    atmosphere: '#1a3060',
-    surface: '#050810',
-    specular: '#001128',
-    emissive: '#000408',
-    emissiveIntensity: 0.4,
-    countryCap: '#0d1c36',
-    countrySide: 'rgba(20, 70, 140, 0.12)',
-    countryStroke: 'rgba(50, 120, 200, 0.42)',
-  };
+// Globe visual settings (dark mode)
+const GLOBE_COLORS = {
+  atmosphere: '#6b8aad',
+  atmosphereAltitude: 0.16,
+  surface: '#ffffff',
+  specular: '#445566',
+  emissive: '#000000',
+  emissiveIntensity: 0.05,
+  shininess: 18,
+  countryCap: 'rgba(0, 0, 0, 0)',
+  countrySide: 'rgba(0, 0, 0, 0)',
+  countryStroke: 'rgba(255, 255, 255, 0.12)',
 };
 
-const getArcColors = (theme: 'dark' | 'light'): Record<string, string> => {
-  if (theme === 'light') {
-    return {
-      amber: '#b45309',
-      teal: '#0f766e',
-      steel: '#1d4ed8',
-    };
-  }
-
-  return ARC_COLORS;
+// Arc colors
+const RESOLVED_ARC_COLORS: Record<string, string> = {
+  ...ARC_COLORS,
 };
 
 export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
-  ({ theme, selectedCity, selectedArc, simulationMode, decisionImpact, onResetAll, onCitySelect, onArcSelect, onModeChange }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, decisionImpact, onResetAll, onCitySelect, onArcSelect, onModeChange, onSimulationSelect }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<any>(null);
-  const currentThemeRef = useRef<'dark' | 'light'>(theme);
   const arcsDataRef = useRef<any[]>([]);
   const cityDialogRef = useRef<HTMLDivElement>(null);
+  const simulationMenuRef = useRef<HTMLDivElement>(null);
+  const [visibleCityIds, setVisibleCityIds] = useState<string[]>(() => {
+    const orderedCities = [
+      ...CITIES.filter((city) => INITIAL_PRIORITY_CITY_IDS.includes(city.id)),
+      ...CITIES.filter((city) => city.hubTier === 1),
+      ...CITIES,
+    ];
+    const uniqueIds: string[] = [];
+    const seen = new Set<string>();
+    orderedCities.forEach((city) => {
+      if (seen.has(city.id)) return;
+      seen.add(city.id);
+      if (uniqueIds.length < INITIAL_VISIBLE_CITY_COUNT) {
+        uniqueIds.push(city.id);
+      }
+    });
+    return uniqueIds;
+  });
   const [hintVisible, setHintVisible] = useState(true);
+  const [isSimulationMenuOpen, setIsSimulationMenuOpen] = useState(false);
   const [cityDialogPosition, setCityDialogPosition] = useState<CityDialogPosition>({
     left: 40,
     top: 40,
     side: 'right',
   });
+  const visibleCityIdSet = useMemo(() => new Set(visibleCityIds), [visibleCityIds]);
+
+  const buildVisibleCityPoints = () =>
+    CITIES
+      .map((city, cityIndex) => ({ ...city, cityIndex }))
+      .filter((city) => visibleCityIdSet.has(city.id));
+
+  const buildVisibleOverlayData = () => {
+    const visibleCityPoints = buildVisibleCityPoints();
+    const visibleCityLabels = visibleCityPoints.map((city) => ({
+      type: 'city-label' as const,
+      lat: city.lat,
+      lng: city.lng,
+      name: city.name,
+    }));
+    const visibleCompanyHubs = COMPANY_HUBS.filter((hub) =>
+      CITIES.some(
+        (city) =>
+          visibleCityIdSet.has(city.id) &&
+          haversineKm(city.lat, city.lng, hub.lat, hub.lng) <= 140,
+      ),
+    );
+    const companyHubOverlays = visibleCompanyHubs.map((hub) => ({
+      type: 'company-hub' as const,
+      lat: hub.lat,
+      lng: hub.lng,
+      name: hub.name,
+      logoPath: hub.logoPath,
+      markerColor: hub.markerColor,
+      note: hub.note,
+    }));
+    return [...visibleCityLabels, ...companyHubOverlays];
+  };
 
   // Sync props to STATE and trigger globe zoom
   useEffect(() => {
@@ -165,12 +219,25 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
     // Always trigger a render to update visuals (colors, radius, etc.)
     render();
-  }, [selectedCity, selectedArc, simulationMode, decisionImpact, theme]);
+  }, [selectedCity, selectedArc, simulationMode, decisionImpact]);
 
-  // Update theme ref
+  // (theme ref removed — dark-only)
+
   useEffect(() => {
-    currentThemeRef.current = theme;
-  }, [theme]);
+    if (selectedCity === null) return;
+    const selectedCityId = CITIES[selectedCity]?.id;
+    if (!selectedCityId || visibleCityIdSet.has(selectedCityId)) return;
+    setVisibleCityIds((prev) => [...prev, selectedCityId]);
+  }, [selectedCity, visibleCityIdSet]);
+
+  useEffect(() => {
+    if (selectedArc === null) return;
+    const conn = CONNECTIONS[selectedArc];
+    if (!conn) return;
+    const toAdd = [conn.from, conn.to].filter((cityId) => !visibleCityIdSet.has(cityId));
+    if (toAdd.length === 0) return;
+    setVisibleCityIds((prev) => [...prev, ...toAdd]);
+  }, [selectedArc, visibleCityIdSet]);
 
   function triggerJourney(fromId: string, toId: string) {
     const fromIdx = CITIES.findIndex(city => city.id === fromId);
@@ -224,7 +291,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     if (!globeRef.current) return;
 
     const globe = globeRef.current;
-    const isLightTheme = currentThemeRef.current === 'light';
+    const isLightTheme = false;
     const isPacketLossMode = STATE.simulationMode === 'packet-loss';
     const isCableCutMode = STATE.simulationMode === 'cable-cut';
     const activeDecisionImpact =
@@ -233,20 +300,18 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         : null;
     const affectedArcIndices = new Set<number>();
     const highlightedCityIds = new Set(activeDecisionImpact?.consequence.highlightCities ?? []);
-    const dimmedArcOpacity = isLightTheme ? 0.35 : 0.15;
+    const dimmedArcOpacity = 0.15;
     const decisionAccentColor = activeDecisionImpact
       ? activeDecisionImpact.consequence.impactType === 'positive'
-        ? '#22c55e'
+        ? '#8ba389'
         : activeDecisionImpact.consequence.impactType === 'negative'
-          ? '#ef4444'
-          : '#f59e0b'
+          ? '#9a7d7d'
+          : '#8c8f9f'
       : null;
-    const flickerMinOpacity = isLightTheme ? 0.55 : 0.3;
-    const flickerRange = isLightTheme ? 0.45 : 0.7;
-    const accentColor = currentThemeRef.current === 'light' ? '#ea8c0d' : '#e8a020';
-    const ringColor = currentThemeRef.current === 'light'
-      ? 'rgba(234, 140, 13, 0.5)'
-      : 'rgba(232, 160, 32, 0.5)';
+    const flickerMinOpacity = 0.28;
+    const flickerRange = 0.34;
+    const accentColor = '#8e9fb2';
+    const ringColor = 'rgba(142, 159, 178, 0.48)';
 
     // Helper: check if arc is connected to selected city
     const isArcConnectedToCity = (arcIndex: number, cityIndex: number): boolean => {
@@ -275,30 +340,32 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     }
 
     // Update point radius based on selection
-    globe.pointRadius((d: any, i: number) => {
-      const city = CITIES[i];
+    globe.pointRadius((d: any) => {
+      const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
+      const city = cityIndex >= 0 ? CITIES[cityIndex] : null;
       if (city && highlightedCityIds.has(city.id)) return 0.92;
-      return STATE.selectedCity === i ? 1.0 : 0.65;
+      return STATE.selectedCity === cityIndex ? 1.0 : 0.65;
     });
 
     // Update point color with glowing effect for selected
-    globe.pointColor((d: any, i: number) => {
-      const city = CITIES[i];
+    globe.pointColor((d: any) => {
+      const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
+      const city = cityIndex >= 0 ? CITIES[cityIndex] : null;
       if (city && highlightedCityIds.has(city.id) && activeDecisionImpact) {
         if (activeDecisionImpact.consequence.impactType === 'positive') {
-          return '#22c55e';
+          return '#8ba389';
         }
         if (activeDecisionImpact.consequence.impactType === 'negative') {
-          return '#ef4444';
+          return '#9a7d7d';
         }
-        return '#f59e0b';
+        return '#8c8f9f';
       }
-      return STATE.selectedCity === i ? accentColor : '#e8a020';
+      return STATE.selectedCity === cityIndex ? accentColor : '#7f8fa3';
     });
 
     // Update arc stroke width — thicker for selected, AND vary by congestion in high-load mode
     globe.arcStroke((d: any, i: number) => {
-      let baseStroke = isLightTheme ? 0.72 : 0.5;
+      let baseStroke = 0.34;
       
       // In high-load mode, vary thickness based on congestion
       if (STATE.simulationMode === 'high-load') {
@@ -310,8 +377,8 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         }
       }
       
-      if (STATE.selectedArc === i) return baseStroke + 0.4; // Add 0.4 for selected
-      if (activeDecisionImpact && affectedArcIndices.has(i)) return baseStroke + 0.72;
+      if (STATE.selectedArc === i) return baseStroke + 0.22;
+      if (activeDecisionImpact && affectedArcIndices.has(i)) return baseStroke + 0.28;
       return baseStroke;
     });
 
@@ -362,15 +429,14 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
       // Override base color based on simulation mode
       if (STATE.simulationMode === 'high-load') {
-        baseColor = isLightTheme ? '#b45309' : '#e8a020'; // All amber in high load
+        baseColor = '#7e8694';
       } else if (isPacketLossMode) {
-        baseColor = isLightTheme ? '#b91c1c' : '#c97860'; // All rose in packet loss
+        baseColor = '#877c84';
         useFlickerOpacity = true;
       } else if (isCableCutMode) {
-        // Cable cut: all routes turn muted steel, selected route turns red
-        baseColor = isLightTheme ? '#64748b' : '#94a3b8';
+        baseColor = '#7a8694';
         if (STATE.selectedArc === i) {
-          baseColor = '#ef4444'; // Red for cut cable
+          baseColor = '#9a7d7d';
         }
       }
 
@@ -385,20 +451,27 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       if (activeDecisionImpact) {
         if (affectedArcIndices.has(i)) {
           if (activeDecisionImpact.mode === 'packet-loss') {
-            if (activeDecisionImpact.consequence.impactType === 'negative') {
+          if (activeDecisionImpact.consequence.impactType === 'negative') {
               const pulseOpacity = 0.5 + Math.random() * 0.5;
-              return hexToRgba('#ef4444', pulseOpacity);
+              return hexToRgba('#9a7d7d', pulseOpacity);
             }
-            return '#22c55e';
+            return '#8ba389';
           }
 
           if (activeDecisionImpact.mode === 'cable-cut') {
-            return activeDecisionImpact.consequence.impactType === 'negative' ? '#ef4444' : '#38bdf8';
+            return activeDecisionImpact.consequence.impactType === 'negative' ? '#9a7d7d' : '#7f92a3';
           }
 
-          return activeDecisionImpact.consequence.impactType === 'negative' ? '#ef4444' : '#f59e0b';
+          return activeDecisionImpact.consequence.impactType === 'negative' ? '#9a7d7d' : '#8c8f9f';
         }
-        return hexToRgba(baseColor, isLightTheme ? 0.08 : 0.03);
+        if (
+          activeDecisionImpact.mode === 'high-load' &&
+          activeDecisionImpact.consequence.impactType === 'negative' &&
+          affectedArcIndices.size === 0
+        ) {
+          return hexToRgba(baseColor, 0.92);
+        }
+        return hexToRgba(baseColor, 0.14);
       }
 
       // If a city is selected, dim arcs not connected to it
@@ -486,9 +559,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           lat: city.lat,
           lng: city.lng,
           text: activeDecisionImpact.consequence.impactType === 'negative' ? '!' : '+',
-          color: activeDecisionImpact.consequence.impactType === 'negative' ? '#ef4444' : '#22c55e',
-          size: 1.5,
-        });
+            color: activeDecisionImpact.consequence.impactType === 'negative' ? '#9a7d7d' : '#8ba389',
+            size: 1.5,
+          });
       });
     } else if (isPacketLossMode && arcsDataRef.current.length > 0) {
       const step = Math.max(1, Math.floor(arcsDataRef.current.length / 5));
@@ -498,7 +571,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           lat: (arc.startLat + arc.endLat) / 2,
           lng: (arc.startLng + arc.endLng) / 2,
           text: '↺',
-          color: isLightTheme ? '#b45309' : '#f59e0b',
+          color: '#8a8088',
           size: 1.05,
         });
       }
@@ -514,21 +587,21 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             lat: (cutArc.startLat + cutArc.endLat) / 2,
             lng: (cutArc.startLng + cutArc.endLng) / 2,
             text: '✕',
-            color: '#ef4444',
+            color: '#9a7d7d',
             size: 1.6,
           },
           {
             lat: cutArc.startLat,
             lng: cutArc.startLng,
             text: '⚠',
-            color: '#ef4444',
+            color: '#9a7d7d',
             size: 1.0,
           },
           {
             lat: cutArc.endLat,
             lng: cutArc.endLng,
             text: '⚠',
-            color: '#ef4444',
+            color: '#9a7d7d',
             size: 1.0,
           },
         );
@@ -538,8 +611,8 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           labelsData.push({
             lat: (cutArc.startLat + cutArc.endLat) / 2 + 0.5,
             lng: (cutArc.startLng + cutArc.endLng) / 2,
-            text: '🔄 Rerouting',
-            color: '#22c55e',
+            text: 'Reroute',
+            color: '#8ba389',
             size: 0.85,
           });
         }
@@ -548,21 +621,61 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           lat: 14,
           lng: 0,
           text: '⚠',
-          color: '#ef4444',
+          color: '#9a7d7d',
           size: 1.25,
         });
       }
     }
 
+    // Add native flat center dots for all visible cities
+    const cityLabelDots = buildVisibleCityPoints().map((city: any) => {
+      const cityIndex = typeof city.cityIndex === 'number' ? city.cityIndex : CITIES.findIndex((c) => c.id === city.id);
+      return {
+        lat: city.lat,
+        lng: city.lng,
+        text: '',
+        color: '#38bdf8',
+        size: 0,
+        isCityDot: true,
+        cityIndex,
+      };
+    });
+    
+    const finalLabelsData = [...labelsData, ...cityLabelDots];
+
     globe
-      .labelsData(labelsData)
+      .labelsData(finalLabelsData)
       .labelLat('lat')
       .labelLng('lng')
       .labelText('text')
       .labelSize('size')
       .labelColor('color')
-      .labelDotRadius(activeDecisionImpact ? 0.65 : 0.3)
-      .labelAltitude(activeDecisionImpact ? 0.06 : 0.01);
+      .labelDotRadius((d: any) => d.isCityDot ? (STATE.selectedCity === d.cityIndex ? 1.2 : 0.8) : (activeDecisionImpact ? 0.65 : 0.3))
+      .labelAltitude((d: any) => d.isCityDot ? 0.005 : (activeDecisionImpact ? 0.06 : 0.01))
+      .onLabelClick((d: any) => {
+        if (d.isCityDot) {
+          const clickedIndex = d.cityIndex;
+          if (clickedIndex !== -1) {
+            if (hintVisible) setHintVisible(false);
+            STATE.selectedCity = STATE.selectedCity === clickedIndex ? null : clickedIndex;
+            STATE.selectedArc = null;
+            onArcSelect(null);
+            onCitySelect(STATE.selectedCity);
+            console.log('🖱️ City clicked:', CITIES[clickedIndex].name, '| Index:', clickedIndex);
+            render();
+          }
+        }
+      })
+      .onLabelHover((label: any) => {
+        if (globeRef.current && globeRef.current.controls()) {
+          // Pause rotation if hovering a label OR if a city/arc is already selected
+          globeRef.current.controls().autoRotate = !label && STATE.selectedCity === null && STATE.selectedArc === null;
+          // Change cursor to pointer
+          if (containerRef.current) {
+            containerRef.current.style.cursor = label ? 'pointer' : 'grab';
+          }
+        }
+      });
 
     console.log('🎯 Render — City:', STATE.selectedCity, '| Arc:', STATE.selectedArc, '| Mode:', STATE.simulationMode);
   };
@@ -570,16 +683,15 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const colors = getGlobeColors(theme);
-    const arcColors = getArcColors(theme);
-
     const arcsData = CONNS.map(([i, j, col]) => ({
       startLat: CITIES[i].lat,
       startLng: CITIES[i].lng,
       endLat: CITIES[j].lat,
       endLng: CITIES[j].lng,
-      color: arcColors[col],
+      color: RESOLVED_ARC_COLORS[col],
     }));
+    const visibleCityPoints = buildVisibleCityPoints();
+    const globeOverlayData = buildVisibleOverlayData();
 
     // Store arcsData in ref for render function access
     arcsDataRef.current = arcsData;
@@ -591,68 +703,35 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .width(W)
       .height(H)
       .backgroundColor('rgba(0,0,0,0)')
-      .atmosphereColor(colors.atmosphere)
-      .atmosphereAltitude(0.18)
-      // Points / cities
-      .pointsData(CITIES)
-      .pointLat('lat')
-      .pointLng('lng')
-      .pointColor((d: any) => {
-        const i = CITIES.indexOf(d);
-        return STATE.selectedCity === i
-          ? (theme === 'light' ? '#ea8c0d' : '#e8a020')
-          : '#e8a020';
-      })
-      .pointAltitude(0.012)
-      .pointRadius((d: any) => {
-        const i = CITIES.indexOf(d);
-        return STATE.selectedCity === i ? 1.0 : 0.65;
-      })
-      .onPointClick((point: any, event: any, { lat, lng, altitude }: any) => {
-        const clickedIndex = CITIES.findIndex(city =>
-          city.lat === point.lat && city.lng === point.lng
-        );
-
-        if (clickedIndex !== -1) {
-          if (hintVisible) {
-            setHintVisible(false);
-          }
-
-          STATE.selectedCity = STATE.selectedCity === clickedIndex ? null : clickedIndex;
-          STATE.selectedArc = null;
-          onArcSelect(null);
-          onCitySelect(STATE.selectedCity);
-          console.log('🖱️ City clicked:', CITIES[clickedIndex].name, '| Index:', clickedIndex);
-
-          // TODO: SERVICE - Fetch real city metadata (latency, protocol, connection type)
-          // API endpoint: GET /api/cities/${clickedIndex}/metadata
-          // Response: { latency: number, protocol: string, type: string }
-
-          render();
-        }
-      })
-      .pointLabel((d: any) => {
-        const tooltipBg = theme === 'light' ? 'rgba(255,255,255,.95)' : 'rgba(9,8,13,.95)';
-        const tooltipBorder = theme === 'light' ? 'rgba(234,140,13,.4)' : 'rgba(232,160,32,.3)';
-        const tooltipText = theme === 'light' ? '#ea8c0d' : '#e8a020';
-        const tooltipMuted = theme === 'light' ? '#64748b' : '#364050';
-        const countryCode = typeof d.countryCode === 'string' ? d.countryCode : '';
+      .globeImageUrl(GLOBE_TEXTURE)
+      .bumpImageUrl(GLOBE_BUMP_MAP)
+      .atmosphereColor(GLOBE_COLORS.atmosphere)
+      .atmosphereAltitude(GLOBE_COLORS.atmosphereAltitude)
+      .labelLabel((d: any) => {
+        if (!d.isCityDot) return '';
+        const city = CITIES[d.cityIndex];
+        if (!city) return '';
+        const tooltipBg = 'rgba(0,0,0,.95)';
+        const tooltipBorder = 'rgba(255,255,255,.22)';
+        const tooltipText = '#f1f1f1';
+        const tooltipMuted = '#bdbdbd';
+        const countryCode = typeof city.countryCode === 'string' ? city.countryCode : '';
         const flagSrc = countryCode ? flagImgUrl(countryCode) : '';
         const flagHtml = flagSrc
           ? `<img src="${flagSrc}" width="24" height="18" style="border-radius:2px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.25);" alt="${countryCode}" />`
-          : '🌐';
+          : '<span style="font-size:12px;opacity:.6;">•</span>';
 
         return `
-          <div style="font-family:Inter,system-ui,sans-serif;font-size:13px;
+          <div style="font-family:var(--sans);font-size:13px;
             background:${tooltipBg};border:1px solid ${tooltipBorder};
             padding:8px 12px;border-radius:6px;color:${tooltipText};
             max-width:240px;white-space:normal;line-height:1.5;">
             <div style="font-size:16px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:6px;">
               ${flagHtml}
-              <span style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 6px;border-radius:999px;border:1px solid ${tooltipBorder};background:color-mix(in srgb, ${tooltipText} 12%, transparent);">${countryCode}</span>
-              <span>${d.name}</span>
+              <span style="font-family:var(--sans);font-size:10px;font-weight:600;letter-spacing:.02em;padding:1px 6px;border-radius:999px;border:1px solid ${tooltipBorder};background:color-mix(in srgb, ${tooltipText} 10%, transparent);">${countryCode}</span>
+              <span>${city.name}</span>
             </div>
-            <div style="color:${tooltipMuted};font-size:11px;line-height:1.45;">${d.friendlyFact}</div>
+            <div style="color:${tooltipMuted};font-size:11px;line-height:1.45;">${city.friendlyFact}</div>
           </div>
         `;
       })
@@ -664,10 +743,10 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .arcEndLng('endLng')
       .arcColor('color')
       .arcAltitude(0.28)
-      .arcStroke(0.5)
-      .arcDashLength(0.25)
-      .arcDashGap(0.75)
-      .arcDashAnimateTime(() => 1800 + Math.random() * 1200)
+      .arcStroke(0.34)
+      .arcDashLength(0.18)
+      .arcDashGap(1.1)
+      .arcDashAnimateTime(() => 2400 + Math.random() * 800)
       .arcsTransitionDuration(0)
       .onArcClick((arc: any, event: any, { lat, lng, altitude }: any) => {
         // Find the index of the clicked arc in CONNS array
@@ -692,61 +771,111 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           render();
         }
       })
-      // Rings / selection glow
-      .ringsData([])
+      // Rings / region borders for cities
+      .ringsData(visibleCityPoints)
       .ringLat('lat')
       .ringLng('lng')
-      .ringColor(() => theme === 'light' ? 'rgba(234, 140, 13, 0.5)' : 'rgba(232, 160, 32, 0.5)')
-      .ringMaxRadius(2)
-      .ringPropagationSpeed(2)
-      .ringRepeatPeriod(1500)
-      // Labels (for cable-cut markers)
-      .labelsData([])
-      .labelLat('lat')
-      .labelLng('lng')
-      .labelText('text')
-      .labelSize('size')
-      .labelColor('color')
-      .labelDotRadius(0.3)
-      .labelAltitude(0.01)
+      .ringColor((d: any) => {
+        const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
+        return STATE.selectedCity === cityIndex ? 'rgba(56, 189, 248, 0.9)' : 'rgba(56, 189, 248, 0.45)';
+      })
+      .ringMaxRadius((d: any) => {
+        const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
+        return STATE.selectedCity === cityIndex ? 2.6 : 1.6;
+      })
+      .ringPropagationSpeed(1.2)
+      .ringRepeatPeriod(1800)
       // Countries
       .polygonsData([])
-      .polygonCapColor(() => colors.countryCap)
-      .polygonSideColor(() => colors.countrySide)
-      .polygonStrokeColor(() => colors.countryStroke)
+      .polygonCapColor(() => GLOBE_COLORS.countryCap)
+      .polygonSideColor(() => GLOBE_COLORS.countrySide)
+      .polygonStrokeColor(() => GLOBE_COLORS.countryStroke)
       .polygonAltitude(0.004)
-      // City name labels on globe
-      .htmlElementsData(CITIES)
+      // City labels + company infra square markers
+      .htmlElementsData(globeOverlayData)
       .htmlLat((d: any) => d.lat)
       .htmlLng((d: any) => d.lng)
-      .htmlAltitude(0.015)
+      .htmlAltitude((d: any) => d.type === 'company-hub' ? 0.03 : 0.015)
       .htmlElement((d: any) => {
+        if (d.type === 'company-hub') {
+          const wrap = document.createElement('div');
+          wrap.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            user-select: none;
+          `;
+
+          const square = document.createElement('div');
+          square.style.cssText = `
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            background: color-mix(in srgb, ${d.markerColor} 14%, #0f172a);
+            border: 2px solid ${d.markerColor};
+            box-shadow: 0 0 12px color-mix(in srgb, ${d.markerColor} 45%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+          `;
+          square.title = `${d.name} — ${d.note}`;
+
+          const logo = document.createElement('img');
+          logo.src = d.logoPath;
+          logo.alt = d.name;
+          logo.style.cssText = `
+            width: 14px;
+            height: 14px;
+            object-fit: contain;
+            display: block;
+          `;
+          square.appendChild(logo);
+
+          const label = document.createElement('div');
+          label.style.cssText = `
+            font-family: var(--sans);
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            color: #cbd5e1;
+            text-shadow: 0 0 6px rgba(2,6,23,0.85);
+            white-space: nowrap;
+          `;
+          label.textContent = d.name;
+
+          wrap.appendChild(square);
+          wrap.appendChild(label);
+          return wrap;
+        }
+
         const el = document.createElement('div');
         el.style.cssText = `
-          font-family: 'Space Grotesk', Inter, system-ui, sans-serif;
+          font-family: var(--sans);
           font-size: 10px;
-          font-weight: 600;
-          color: ${theme === 'light' ? '#1e40af' : '#93c5fd'};
-          text-shadow: ${theme === 'light'
-            ? '0 0 4px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.15)'
-            : '0 0 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.6)'};
+          font-weight: 500;
+          color: #e2e8f0;
+          text-shadow: 0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.5);
           white-space: nowrap;
           pointer-events: none;
           user-select: none;
           transform: translate(-50%, -100%);
-          padding-bottom: 6px;
+          padding-bottom: 8px;
           letter-spacing: 0.04em;
         `;
         el.textContent = d.name;
         return el;
       });
 
-    // Style the globe surface
-    globe.globeMaterial().color.set(colors.surface);
-    globe.globeMaterial().specular.set(colors.specular);
-    globe.globeMaterial().shininess = 12;
-    globe.globeMaterial().emissive.set(colors.emissive);
-    globe.globeMaterial().emissiveIntensity = colors.emissiveIntensity;
+    // Style the globe surface — white base so satellite texture is unmodified
+    globe.globeMaterial().color.set(GLOBE_COLORS.surface);
+    globe.globeMaterial().specular.set(GLOBE_COLORS.specular);
+    globe.globeMaterial().shininess = GLOBE_COLORS.shininess;
+    globe.globeMaterial().emissive.set(GLOBE_COLORS.emissive);
+    globe.globeMaterial().emissiveIntensity = GLOBE_COLORS.emissiveIntensity;
 
     // Auto-rotate
     globe.controls().autoRotate = true;
@@ -796,33 +925,17 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         globeRef.current._destructor?.();
       }
     };
-  }, [theme]);
+  }, []);
 
-  // Update globe colors when theme changes
+
+
   useEffect(() => {
     if (!globeRef.current) return;
-
-    const colors = getGlobeColors(theme);
-    const globe = globeRef.current;
-
-    // Update atmosphere
-    globe.atmosphereColor(colors.atmosphere);
-
-    // Update globe material
-    globe.globeMaterial().color.set(colors.surface);
-    globe.globeMaterial().specular.set(colors.specular);
-    globe.globeMaterial().emissive.set(colors.emissive);
-    globe.globeMaterial().emissiveIntensity = colors.emissiveIntensity;
-
-    // Update country colors
-    globe
-      .polygonCapColor(() => colors.countryCap)
-      .polygonSideColor(() => colors.countrySide)
-      .polygonStrokeColor(() => colors.countryStroke);
-
-    // Re-render selection with new theme colors
+    globeRef.current
+      .ringsData(buildVisibleCityPoints())
+      .htmlElementsData(buildVisibleOverlayData());
     render();
-  }, [theme]);
+  }, [visibleCityIds]);
 
   useEffect(() => {
     if (!globeRef.current || !decisionImpact || decisionImpact.mode !== simulationMode) return;
@@ -879,7 +992,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [simulationMode, decisionImpact, theme, selectedCity, selectedArc]);
+  }, [simulationMode, decisionImpact, selectedCity, selectedArc]);
 
   const updateCityDialogPosition = () => {
     if (selectedCity === null) return;
@@ -954,6 +1067,27 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     };
   }, [selectedCity]);
 
+  useEffect(() => {
+    if (!isSimulationMenuOpen) return;
+
+    const handleWindowMouseDown = (event: MouseEvent) => {
+      if (simulationMenuRef.current?.contains(event.target as Node)) return;
+      setIsSimulationMenuOpen(false);
+    };
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSimulationMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handleWindowMouseDown);
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleWindowMouseDown);
+      window.removeEventListener('keydown', handleWindowKeyDown);
+    };
+  }, [isSimulationMenuOpen]);
+
   useImperativeHandle(ref, () => ({
     globeRef,
     triggerJourney,
@@ -962,6 +1096,15 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
   // Get selected city data for overlay
   const selectedCityData = selectedCity !== null ? CITIES[selectedCity] : null;
+  const selectedCityCompanyHubs = selectedCityData
+    ? COMPANY_HUBS
+        .map(hub => ({
+          ...hub,
+          distanceKm: haversineKm(selectedCityData.lat, selectedCityData.lng, hub.lat, hub.lng),
+        }))
+        .filter(hub => hub.distanceKm <= 140)
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+    : [];
   const decisionBadge = decisionImpact && decisionImpact.mode === simulationMode
     ? {
         tone:
@@ -974,29 +1117,39 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         detail: `Highlighting ${decisionImpact.consequence.affectedRoutes.length} affected routes and key hubs.`,
       }
     : null;
-  const simulationBadge =
-    simulationMode === 'packet-loss'
-      ? {
-          tone: 'loss',
-          title: '📶 Packet Loss',
-          detail: 'Dropped data pieces are being re-sent. Look for unstable routes and retry markers.',
-        }
-      : simulationMode === 'cable-cut'
-        ? {
-            tone: 'danger',
-            title: '✂️ Cable Break',
-            detail:
-              selectedArc !== null
-                ? 'A route is cut. Red X and warning markers show the disrupted link and endpoints.'
-                : 'Tap any route to simulate a cable cut. All routes are muted to highlight outage mode.',
-          }
-        : simulationMode === 'high-load'
-          ? {
-              tone: 'warn',
-              title: '🚦 Rush Hour',
-              detail: 'Traffic demand is high. Watch routes become denser and busier across hubs.',
-            }
-          : null;
+  const activeMode = simulationMode || 'normal';
+  const simulationModes = [
+    { id: 'normal', label: 'Normal', tone: 'normal' },
+    { id: 'high-load', label: 'Rush Hour', tone: 'warn' },
+    { id: 'packet-loss', label: 'Packet Loss', tone: 'loss' },
+    { id: 'cable-cut', label: 'Cable Break', tone: 'danger' },
+  ] as const;
+  const simulationModeInfo: Record<string, { title: string; detail: string; tone: string }> = {
+    normal: {
+      title: 'Normal',
+      detail: 'Traffic is balanced and routes stay stable with no major rerouting.',
+      tone: 'normal',
+    },
+    'high-load': {
+      title: 'Rush Hour',
+      detail: 'Demand spikes increase route pressure and can raise waiting time.',
+      tone: 'warn',
+    },
+    'packet-loss': {
+      title: 'Packet Loss',
+      detail: 'Some data packets drop and must be re-sent, causing unstable flow.',
+      tone: 'loss',
+    },
+    'cable-cut': {
+      title: 'Cable Break',
+      detail:
+        selectedArc !== null
+          ? 'The selected route is cut and traffic is rerouted to backup paths.'
+          : 'Select a route to cut and inspect outage impact and rerouting behavior.',
+      tone: 'danger',
+    },
+  };
+  const activeModeInfo = simulationModeInfo[activeMode] ?? simulationModeInfo.normal;
   const legendItems = getGlobeLegendItems(simulationMode, decisionImpact);
 
   const closeCityDialog = () => {
@@ -1018,23 +1171,60 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     onResetAll?.();
   };
 
+  const handleSimulationControlClick = (mode: string) => {
+    setIsSimulationMenuOpen(false);
+    if (onSimulationSelect) {
+      onSimulationSelect(mode);
+      return;
+    }
+    onModeChange(mode);
+  };
+
   return (
     <div className="globe-section">
       <div ref={containerRef} className="globe-container"></div>
       <button className="globe-reset-all-btn" onClick={handleResetAll}>
-        ↺ Reset All
+        Reset view
       </button>
-      <PacketDots globeRef={globeRef} theme={theme} />
-      <HUD />
+      <div ref={simulationMenuRef} className="globe-sim-menu">
+        <button
+          className={`globe-sim-menu-trigger ${isSimulationMenuOpen ? 'is-open' : ''}`}
+          onClick={() => setIsSimulationMenuOpen(prev => !prev)}
+          aria-label="Open simulation mode menu"
+          aria-expanded={isSimulationMenuOpen}
+          aria-haspopup="dialog"
+        >
+          <span className="globe-sim-menu-lines" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </button>
+        {isSimulationMenuOpen && (
+          <div className="globe-sim-controls" role="dialog" aria-label="Simulation mode selection">
+            <div className="globe-sim-menu-title">Simulation mode</div>
+            <div className="globe-sim-chips">
+              {simulationModes.map((mode) => (
+                <button
+                  key={mode.id}
+                  className={`globe-sim-chip globe-sim-chip--${mode.tone} ${activeMode === mode.id ? 'globe-sim-chip--active' : ''}`}
+                  onClick={() => handleSimulationControlClick(mode.id)}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+            <div className={`globe-sim-info globe-sim-info--${activeModeInfo.tone}`}>
+              <div className="globe-sim-info-title">{activeModeInfo.title}</div>
+              <div className="globe-sim-info-detail">{activeModeInfo.detail}</div>
+            </div>
+          </div>
+        )}
+      </div>
+      <PacketDots globeRef={globeRef} />
       {hintVisible && (
         <div className="globe-hint">
-          👆 Tap any city to begin
-        </div>
-      )}
-      {simulationBadge && (
-        <div className={`globe-sim-badge globe-sim-badge--${simulationBadge.tone}`}>
-          <div className="globe-sim-badge-title">{simulationBadge.title}</div>
-          <div className="globe-sim-badge-detail">{simulationBadge.detail}</div>
+          Tap any city to begin
         </div>
       )}
       {decisionBadge && (
@@ -1044,7 +1234,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         </div>
       )}
       <div className="globe-legend">
-        <div className="globe-legend-title">🗺️ Globe legend</div>
+        <div className="globe-legend-title">Globe legend</div>
         <div className="globe-legend-list">
           {legendItems.map((item) => (
             <div key={item.id} className="globe-legend-item">
@@ -1081,16 +1271,52 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           <div className="city-dialog-region">{selectedCityData.region}</div>
           <div className="city-dialog-divider" />
           <div className="city-dialog-tier">
-            {selectedCityData.hubTier === 1 ? '🌐 Major Internet Hub' : '📡 Regional Hub'}
+            {selectedCityData.hubTier === 1 ? 'Major internet hub' : 'Regional hub'}
           </div>
           <div className="city-dialog-fact">{selectedCityData.friendlyFact}</div>
           <div className="city-dialog-stat">
-            <span className="stat-icon">⚡</span>
+            <span className="stat-icon">•</span>
             <span>{selectedCityData.heroStat}</span>
           </div>
+          {selectedCityCompanyHubs.length > 0 && (
+            <div className="city-dialog-company-section">
+              <div className="city-dialog-company-title">Data center and company hubs in this area</div>
+              <div className="city-dialog-company-list">
+                {selectedCityCompanyHubs.map((hub) => (
+                  <div key={hub.id} className="city-dialog-company-item">
+                    <div className="city-dialog-company-head">
+                      <img
+                        src={hub.logoPath}
+                        width={36}
+                        height={36}
+                        alt={hub.name}
+                        className="city-dialog-company-logo"
+                      />
+                      <div className="city-dialog-company-name-group">
+                        <span className="city-dialog-company-name">{hub.name}</span>
+                        <span className="city-dialog-company-distance">{Math.round(hub.distanceKm)} km from center</span>
+                      </div>
+                    </div>
+                    <div className="city-dialog-company-focus">{hub.focus}</div>
+                    <div className="city-dialog-company-note">{hub.visitorFact}</div>
+                    <div className="city-dialog-company-map">
+                      <iframe
+                        width="100%"
+                        height="140"
+                        style={{ border: 0, borderRadius: '8px', marginTop: '12px', background: '#0f172a' }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        src={`https://maps.google.com/maps?q=${encodeURIComponent(hub.name + ' office ' + selectedCityData.name)}&t=k&z=12&ie=UTF8&iwloc=&output=embed`}
+                      ></iframe>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="city-dialog-detail">{selectedCityData.fact}</div>
           <button className="city-dialog-close" onClick={closeCityDialog}>
-            ✕ Close
+            Close
           </button>
         </div>
       )}
