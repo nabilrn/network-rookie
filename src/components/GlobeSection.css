@@ -12,15 +12,15 @@
   pointer-events: none;
   z-index: 0;
   background-image:
-    radial-gradient(circle at 12% 18%, var(--globe-star-strong) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 26% 74%, var(--globe-star-soft) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 48% 33%, var(--globe-star-strong) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 66% 12%, var(--globe-star-soft) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 78% 62%, var(--globe-star-soft) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 91% 41%, var(--globe-star-strong) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 8% 56%, var(--globe-star-soft) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 37% 88%, var(--globe-star-strong) 0 1px, transparent 1.5px);
-  opacity: 0.95;
+    radial-gradient(circle at 20% 30%, var(--globe-star-strong) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 20%, var(--globe-star-soft) 0 1px, transparent 1px),
+    radial-gradient(circle at 40% 70%, var(--globe-star-strong) 0 1px, transparent 1px),
+    radial-gradient(circle at 70% 80%, var(--globe-star-soft) 0 1px, transparent 1px),
+    radial-gradient(circle at 10% 85%, var(--globe-star-soft) 0 1px, transparent 1px),
+    radial-gradient(circle at 90% 50%, var(--globe-star-strong) 0 1px, transparent 1px);
+  background-size: 600px 600px;
+  background-repeat: repeat;
+  opacity: 0.5;
 }
 
 .globe-container {

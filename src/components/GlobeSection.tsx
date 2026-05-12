@@ -7,6 +7,12 @@ import { getDecisionMarker, getGlobeLegendItems } from '../utils/globeLegend';
 import { PacketDots } from './PacketDots';
 import './GlobeSection.css';
 
+const STARLINK_SATS = Array.from({ length: 40 }).map((_, i) => ({
+  type: 'satellite' as const,
+  id: `sat-${i}`,
+  lat: (Math.random() - 0.5) * 160,
+  lng: (Math.random() - 0.5) * 360,
+}));
 interface GlobeSectionProps {
   selectedCity: number | null;
   selectedArc: number | null;
@@ -165,7 +171,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       markerColor: hub.markerColor,
       note: hub.note,
     }));
-    return [...visibleCityLabels, ...companyHubOverlays];
+    return [...visibleCityLabels, ...companyHubOverlays, ...STARLINK_SATS];
   };
 
   // Sync props to STATE and trigger globe zoom
@@ -735,6 +741,18 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           </div>
         `;
       })
+      // Underwater/Terrestrial Backbone (Paths)
+      .pathsData(CONNS.filter(([i, j]) => haversineKm(CITIES[i].lat, CITIES[i].lng, CITIES[j].lat, CITIES[j].lng) > 3500).map(([i, j]) => ({
+        coords: [
+          [CITIES[i].lat, CITIES[i].lng],
+          [CITIES[j].lat, CITIES[j].lng]
+        ]
+      })))
+      .pathPoints('coords')
+      .pathPointLat((p: any) => p[0])
+      .pathPointLng((p: any) => p[1])
+      .pathColor(() => 'rgba(234, 179, 8, 0.85)')
+      .pathStroke(1.2)
       // Arcs / streams
       .arcsData(arcsData)
       .arcStartLat('startLat')
@@ -795,7 +813,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .htmlElementsData(globeOverlayData)
       .htmlLat((d: any) => d.lat)
       .htmlLng((d: any) => d.lng)
-      .htmlAltitude((d: any) => d.type === 'company-hub' ? 0.03 : 0.015)
+      .htmlAltitude((d: any) => d.type === 'company-hub' ? 0.03 : (d.type === 'satellite' ? 0.18 : 0.015))
       .htmlElement((d: any) => {
         if (d.type === 'company-hub') {
           const wrap = document.createElement('div');
@@ -811,16 +829,16 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
           const square = document.createElement('div');
           square.style.cssText = `
-            width: 22px;
-            height: 22px;
-            border-radius: 4px;
-            background: color-mix(in srgb, ${d.markerColor} 14%, #0f172a);
-            border: 2px solid ${d.markerColor};
-            box-shadow: 0 0 12px color-mix(in srgb, ${d.markerColor} 45%, transparent);
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            background: #ffffff;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.6);
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
+            padding: 3px;
           `;
           square.title = `${d.name} — ${d.note}`;
 
@@ -848,6 +866,44 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           label.textContent = d.name;
 
           wrap.appendChild(square);
+          wrap.appendChild(label);
+          return wrap;
+        } else if (d.type === 'satellite') {
+          const wrap = document.createElement('div');
+          wrap.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            pointer-events: none;
+            user-select: none;
+          `;
+          
+          const icon = document.createElement('div');
+          icon.style.cssText = `
+            width: 20px;
+            height: 20px;
+            opacity: 0.9;
+            filter: drop-shadow(0 0 4px #0ea5e9);
+          `;
+          const img = document.createElement('img');
+          img.src = '/asset/starlink.svg';
+          img.style.cssText = 'width: 100%; height: 100%; display: block; object-fit: contain; filter: invert(1);';
+          icon.appendChild(img);
+
+          const label = document.createElement('div');
+          label.style.cssText = `
+            font-family: monospace;
+            font-size: 8px;
+            font-weight: bold;
+            color: #38bdf8;
+            background: rgba(15, 23, 42, 0.7);
+            padding: 2px 4px;
+            border-radius: 3px;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+          `;
+          label.textContent = 'SAT';
+
+          wrap.appendChild(icon);
           wrap.appendChild(label);
           return wrap;
         }

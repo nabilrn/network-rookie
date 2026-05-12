@@ -51,50 +51,27 @@ export function getGlobeLegendItems(
   const mode = normalizeMode(simulationMode);
   const activeDecision = decisionImpact && decisionImpact.mode === mode ? decisionImpact : null;
 
-  const modeRouteLegend: Record<typeof mode, GlobeLegendItem> = {
-    normal: {
-      id: 'route-normal',
-      symbol: '━━',
-      text: 'Route lines are steady when traffic is normal.',
-      tone: 'neutral',
-    },
-    'high-load': {
-      id: 'route-high-load',
-      symbol: '━━',
-      text: 'Thicker routes mean traffic is getting busier.',
-      tone: 'warn',
-    },
-    'packet-loss': {
-      id: 'route-packet-loss',
-      symbol: '↺',
-      text: 'Retry marker means a small piece of data had to be sent again.',
-      tone: 'danger',
-    },
-    'cable-cut': {
-      id: 'route-cable-cut',
-      symbol: '✕',
-      text: 'X marks a route that is currently disrupted.',
-      tone: 'danger',
-    },
-  };
+  const items: GlobeLegendItem[] = [];
 
-  const items: GlobeLegendItem[] = [
-    modeRouteLegend[mode],
-    {
-      id: 'focus-ring',
-      symbol: '◉',
-      text: 'Pulsing ring shows the city or hub in focus.',
-      tone: 'info',
-    },
-  ];
+  if (mode === 'normal') {
+    items.push({ id: 'route-normal', symbol: '━━', text: 'Colored arcs represent network backbone routes.', tone: 'neutral' });
+    items.push({ id: 'subsea-cable', symbol: '━', text: 'Thick yellow lines show intercontinental subsea fiber.', tone: 'warn' });
+    items.push({ id: 'data-packets', symbol: '• •', text: 'Moving dots simulate real-time data packets traversing the network.', tone: 'info' });
+    items.push({ id: 'hub-ring', symbol: '◉', text: 'Pulsing blue rings mark major internet hubs.', tone: 'info' });
+    items.push({ id: 'company-logo', symbol: '🏢', text: 'Logos highlight Big Tech data centers and cloud regions.', tone: 'neutral' });
+    items.push({ id: 'satellite-leo', symbol: 'SAT', text: 'SpaceX Starlink satellites in Low Earth Orbit (LEO).', tone: 'info' });
+  } else if (mode === 'high-load') {
+    items.push({ id: 'route-high-load', symbol: '━━', text: 'Thicker routes mean traffic is getting busier.', tone: 'warn' });
+    items.push({ id: 'high-load-dots', symbol: '• •', text: 'More moving dots mean more traffic entering a route.', tone: 'warn' });
+  } else if (mode === 'packet-loss') {
+    items.push({ id: 'route-packet-loss', symbol: '↺', text: 'Retry marker means a small piece of data had to be sent again.', tone: 'danger' });
+  } else if (mode === 'cable-cut') {
+    items.push({ id: 'route-cable-cut', symbol: '✕', text: 'X marks a route that is currently disrupted.', tone: 'danger' });
+  }
 
-  if (mode === 'high-load') {
-    items.push({
-      id: 'high-load-dots',
-      symbol: '• • •',
-      text: 'More moving dots mean more traffic entering a route.',
-      tone: 'warn',
-    });
+  // Common item for focus (only in simulation modes or when hovering/selecting)
+  if (mode !== 'normal') {
+     items.push({ id: 'focus-ring', symbol: '◉', text: 'Pulsing ring shows the city or hub in focus.', tone: 'info' });
   }
 
   if (activeDecision) {
