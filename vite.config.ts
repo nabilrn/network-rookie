@@ -17,8 +17,7 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
-  // Use relative asset URLs so Pages + custom domain/subpath deployments are safe.
-  base: './',
+  base: process.env.GITHUB_ACTIONS ? '/network-rookie/' : './',
 
   plugins: [
     figmaAssetResolver(),
