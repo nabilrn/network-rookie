@@ -9,6 +9,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/explore" element={<GlobeExperience />} />
+        <Route path="*" element={<LandingPage />} />
       </Routes>
     </HashRouter>
   );

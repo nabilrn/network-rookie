@@ -34,22 +34,6 @@ export default defineConfig({
     },
   },
 
-  build: {
-    rollupOptions: {
-      output: {
-        // Keep JS/CSS entry names stable to avoid stale HTML -> missing hashed JS on Pages/CDN caches.
-        entryFileNames: 'assets/index.js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: (assetInfo) => {
-          if (assetInfo.name?.endsWith('.css')) {
-            return 'assets/index.css'
-          }
-          return 'assets/[name]-[hash][extname]'
-        },
-      },
-    },
-  },
-
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
 })
