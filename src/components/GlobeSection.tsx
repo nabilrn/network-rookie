@@ -5,6 +5,16 @@ import { CITIES, CONNS, CONNECTIONS, ARC_COLORS, COMPANY_HUBS } from '../data/ne
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { getDecisionMarker, getGlobeLegendItems } from '../utils/globeLegend';
 import { PacketDots } from './PacketDots';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+} from '../app/components/ui/dropdown-menu';
+import { Switch } from '../app/components/ui/switch';
+import { Button } from '../app/components/ui/button';
+import { Layers } from 'lucide-react';
 import './GlobeSection.css';
 
 const STARLINK_SATS = Array.from({ length: 40 }).map((_, i) => ({
@@ -18,6 +28,8 @@ interface GlobeSectionProps {
   selectedArc: number | null;
   simulationMode: string | null;
   decisionImpact: DecisionVisualImpact | null;
+  scenarioStory?: string | null;
+  scenarioRoute?: { fromId?: string; toId?: string } | null;
   onResetAll?: () => void;
   onCitySelect: (index: number | null) => void;
   onArcSelect: (index: number | null) => void;
@@ -40,6 +52,7 @@ export const STATE = {
   simulationMode: 'normal' as string,
   osiStep: null as number | null,
   decisionImpact: null as DecisionVisualImpact | null,
+  scenarioRoute: null as { fromId: string; toId: string } | null,
 };
 
 // Helper: render a flag <img> from ISO country code (works on Chromium/Windows)
@@ -80,6 +93,68 @@ const haversineKm = (
   return earthRadiusKm * c;
 };
 
+const interpolateGreatCircle = (lat1: number, lng1: number, lat2: number, lng2: number, t: number) => {
+  const phi1 = toRadians(lat1);
+  const theta1 = toRadians(lng1);
+  const phi2 = toRadians(lat2);
+  const theta2 = toRadians(lng2);
+
+  const x1 = Math.cos(phi1) * Math.cos(theta1);
+  const y1 = Math.cos(phi1) * Math.sin(theta1);
+  const z1 = Math.sin(phi1);
+
+  const x2 = Math.cos(phi2) * Math.cos(theta2);
+  const y2 = Math.cos(phi2) * Math.sin(theta2);
+  const z2 = Math.sin(phi2);
+
+  const dot = clamp(x1 * x2 + y1 * y2 + z1 * z2, -1, 1);
+  const omega = Math.acos(dot);
+  if (omega === 0) return { lat: lat1, lng: lng1 };
+
+  const sinOmega = Math.sin(omega);
+  const w1 = Math.sin((1 - t) * omega) / sinOmega;
+  const w2 = Math.sin(t * omega) / sinOmega;
+
+  let x = x1 * w1 + x2 * w2;
+  let y = y1 * w1 + y2 * w2;
+  let z = z1 * w1 + z2 * w2;
+
+  const mag = Math.sqrt(x*x + y*y + z*z);
+  x /= mag; y /= mag; z /= mag;
+
+  const lat = Math.asin(z) * 180 / Math.PI;
+  const lng = Math.atan2(y, x) * 180 / Math.PI;
+  
+  return { lat, lng };
+};
+
+const getArcFocusAltitude = (distanceKm: number): number => {
+  if (distanceKm >= 12500) return 1.62;
+  if (distanceKm >= 9000) return 1.42;
+  if (distanceKm >= 6500) return 1.2;
+  if (distanceKm >= 3500) return 1.0;
+  return 0.82;
+};
+
+const getCableCutReasonText = (
+  story: string | null | undefined,
+  connection: (typeof CONNECTIONS)[number] | undefined,
+): string => {
+  const normalizedStory = (story ?? '').toLowerCase();
+  const disasterPattern = /earthquake|disaster|tsunami|hurricane|storm|seismic|landslide/i;
+  if (disasterPattern.test(normalizedStory)) return 'Disaster damaged the fiber segment.';
+
+  const sharkPattern = /shark|bite/i;
+  if (sharkPattern.test(normalizedStory)) return 'Shark bite damaged the fiber.';
+
+  const anchorPattern = /anchor|ship|vessel|trawler|boat/i;
+  if (anchorPattern.test(normalizedStory) || connection?.type === 'Subsea cable') {
+    return 'Ship anchor dragged across the cable.';
+  }
+
+  return 'Fiber segment failed on this route.';
+};
+
 type CityDialogPosition = {
   left: number;
   top: number;
@@ -110,12 +185,12 @@ const RESOLVED_ARC_COLORS: Record<string, string> = {
 };
 
 export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
-  ({ selectedCity, selectedArc, simulationMode, decisionImpact, onResetAll, onCitySelect, onArcSelect, onModeChange, onSimulationSelect }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, decisionImpact, scenarioStory, scenarioRoute, onResetAll, onCitySelect, onArcSelect, onModeChange, onSimulationSelect }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<any>(null);
   const arcsDataRef = useRef<any[]>([]);
   const cityDialogRef = useRef<HTMLDivElement>(null);
-  const simulationMenuRef = useRef<HTMLDivElement>(null);
+  const rotationLockedRef = useRef(false);
   const [visibleCityIds, setVisibleCityIds] = useState<string[]>(() => {
     const orderedCities = [
       ...CITIES.filter((city) => INITIAL_PRIORITY_CITY_IDS.includes(city.id)),
@@ -134,7 +209,6 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     return uniqueIds;
   });
   const [hintVisible, setHintVisible] = useState(true);
-  const [isSimulationMenuOpen, setIsSimulationMenuOpen] = useState(false);
   const [cityDialogPosition, setCityDialogPosition] = useState<CityDialogPosition>({
     left: 40,
     top: 40,
@@ -142,26 +216,60 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
   });
   const visibleCityIdSet = useMemo(() => new Set(visibleCityIds), [visibleCityIds]);
 
+  const [layers, setLayers] = useState({
+    arcs: true,
+    fibers: true,
+    packets: true,
+    rings: true,
+    hubs: true,
+    satellites: true,
+  });
+  const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (globeRef.current) {
+      render();
+    }
+  }, [layers]);
+
   const buildVisibleCityPoints = () =>
     CITIES
       .map((city, cityIndex) => ({ ...city, cityIndex }))
       .filter((city) => visibleCityIdSet.has(city.id));
 
   const buildVisibleOverlayData = () => {
+    const isSimActive = STATE.simulationMode !== 'normal';
+    const selectedArcIndex = STATE.selectedArc;
+
     const visibleCityPoints = buildVisibleCityPoints();
-    const visibleCityLabels = visibleCityPoints.map((city) => ({
+    
+    let filteredCities = visibleCityPoints;
+    let filteredHubs = layers.hubs ? COMPANY_HUBS : [];
+    let filteredSats = layers.satellites ? STARLINK_SATS : [];
+
+    // If simulation is active and an arc is focused, hide everything else for visual clarity
+    if (isSimActive && selectedArcIndex !== null) {
+      const conn = CONNECTIONS[selectedArcIndex];
+      filteredCities = visibleCityPoints.filter(city => city.id === conn.from || city.id === conn.to);
+      filteredHubs = [];
+      filteredSats = [];
+    }
+
+    const visibleCityLabels = filteredCities.map((city) => ({
       type: 'city-label' as const,
       lat: city.lat,
       lng: city.lng,
       name: city.name,
     }));
-    const visibleCompanyHubs = COMPANY_HUBS.filter((hub) =>
+    
+    const visibleCompanyHubs = filteredHubs.filter((hub) =>
       CITIES.some(
         (city) =>
           visibleCityIdSet.has(city.id) &&
           haversineKm(city.lat, city.lng, hub.lat, hub.lng) <= 140,
       ),
     );
+    
     const companyHubOverlays = visibleCompanyHubs.map((hub) => ({
       type: 'company-hub' as const,
       lat: hub.lat,
@@ -171,7 +279,24 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       markerColor: hub.markerColor,
       note: hub.note,
     }));
-    return [...visibleCityLabels, ...companyHubOverlays, ...STARLINK_SATS];
+    
+    return [...visibleCityLabels, ...companyHubOverlays, ...filteredSats];
+  };
+
+  const getRouteCities = () => {
+    const route = STATE.scenarioRoute;
+    if (route?.fromId && route?.toId) {
+      const fromCity = CITIES.find((city) => city.id === route.fromId);
+      const toCity = CITIES.find((city) => city.id === route.toId);
+      if (fromCity && toCity) return { fromCity, toCity };
+    }
+    if (STATE.selectedArc !== null && CONNECTIONS[STATE.selectedArc]) {
+      const conn = CONNECTIONS[STATE.selectedArc];
+      const fromCity = CITIES.find((city) => city.id === conn.from);
+      const toCity = CITIES.find((city) => city.id === conn.to);
+      if (fromCity && toCity) return { fromCity, toCity };
+    }
+    return null;
   };
 
   // Sync props to STATE and trigger globe zoom
@@ -186,9 +311,17 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     STATE.selectedArc = selectedArc;
     STATE.simulationMode = newMode;
     STATE.decisionImpact = decisionImpact;
+    STATE.scenarioRoute =
+      scenarioRoute?.fromId && scenarioRoute?.toId
+        ? { fromId: scenarioRoute.fromId, toId: scenarioRoute.toId }
+        : null;
 
     const globe = globeRef.current;
     const controls = globe.controls ? globe.controls() : null;
+    const isSimulationFocus = newMode !== 'normal' && selectedArc !== null;
+    if (isSimulationFocus) {
+      rotationLockedRef.current = true;
+    }
 
     // Zoom IN close to city + stop rotation
     if (selectedCity !== null) {
@@ -202,6 +335,27 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       );
       setHintVisible(false);
     }
+    // Zoom to specific arc (useful for cable breaks)
+    else if (selectedArc !== null && CONNS[selectedArc]) {
+      const conn = CONNS[selectedArc];
+      const fromCity = CITIES[conn[0]];
+      const toCity = CITIES[conn[1]];
+      const midLat = (fromCity.lat + toCity.lat) / 2;
+      const routeDistanceKm =
+        CONNECTIONS[selectedArc]?.distanceKm ??
+        haversineKm(fromCity.lat, fromCity.lng, toCity.lat, toCity.lng);
+      const routeAltitude = getArcFocusAltitude(routeDistanceKm);
+      let midLng = (fromCity.lng + toCity.lng) / 2;
+      
+      // Handle anti-meridian crossing for pacific routes
+      if (Math.abs(fromCity.lng - toCity.lng) > 180) {
+        midLng = midLng > 0 ? midLng - 180 : midLng + 180;
+      }
+      
+      if (controls) controls.autoRotate = false;
+      globe.pointOfView({ lat: midLat, lng: midLng, altitude: routeAltitude }, 1200);
+      setHintVisible(false);
+    }
     // Zoom OUT when simulation mode changes (dramatic overview effect)
     else if (modeChanged) {
       if (controls) controls.autoRotate = false;
@@ -211,7 +365,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       setTimeout(() => {
         if (globeRef.current?.controls) {
           const currentControls = globeRef.current.controls();
-          if (currentControls && STATE.selectedCity === null) {
+          if (currentControls && STATE.selectedCity === null && !rotationLockedRef.current) {
             currentControls.autoRotate = true;
           }
         }
@@ -220,12 +374,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     }
     // Reset state — resume rotation
     else if (selectedCity === null && selectedArc === null) {
-      if (controls) controls.autoRotate = true;
+      if (controls && !rotationLockedRef.current) controls.autoRotate = true;
     }
 
     // Always trigger a render to update visuals (colors, radius, etc.)
     render();
-  }, [selectedCity, selectedArc, simulationMode, decisionImpact]);
+  }, [selectedCity, selectedArc, simulationMode, decisionImpact, scenarioStory, scenarioRoute]);
 
   // (theme ref removed — dark-only)
 
@@ -297,9 +451,84 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     if (!globeRef.current) return;
 
     const globe = globeRef.current;
+    const focusedSimulation = STATE.simulationMode !== 'normal' && STATE.selectedArc !== null;
+    if (focusedSimulation) {
+      console.log('[Globe] focused sim', {
+        mode: STATE.simulationMode,
+        selectedArc: STATE.selectedArc,
+        scenarioRoute: STATE.scenarioRoute,
+      });
+    }
+    const arcIndices = focusedSimulation ? [STATE.selectedArc as number] : CONNS.map((_, index) => index);
+    const refreshedArcsData = arcIndices
+      .map((arcIndex) => {
+        const conn = CONNS[arcIndex];
+        if (!conn) return null;
+        const [i, j, col] = conn;
+        let startLat = CITIES[i].lat;
+        let startLng = CITIES[i].lng;
+        let endLat = CITIES[j].lat;
+        let endLng = CITIES[j].lng;
+
+        if (focusedSimulation && STATE.selectedArc === arcIndex && STATE.scenarioRoute) {
+          const fromCity = CITIES.find((city) => city.id === STATE.scenarioRoute?.fromId);
+          const toCity = CITIES.find((city) => city.id === STATE.scenarioRoute?.toId);
+          if (fromCity && toCity) {
+            startLat = fromCity.lat;
+            startLng = fromCity.lng;
+            endLat = toCity.lat;
+            endLng = toCity.lng;
+          }
+        }
+
+        return {
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+          color: RESOLVED_ARC_COLORS[col],
+          arcIndex,
+        };
+      })
+      .filter((arc): arc is { startLat: number; startLng: number; endLat: number; endLng: number; color: string; arcIndex: number } => arc !== null);
+
+    arcsDataRef.current = refreshedArcsData;
+    globe.arcsData(layers.arcs ? refreshedArcsData : []);
+    
+    const dynamicHtmlElements = buildVisibleOverlayData();
+
+    if (focusedSimulation && refreshedArcsData[0]) {
+      const activeArc = refreshedArcsData[0];
+      console.log('[Globe] arc endpoints', {
+        startLat: activeArc.startLat,
+        startLng: activeArc.startLng,
+        endLat: activeArc.endLat,
+        endLng: activeArc.endLng,
+      });
+    }
+
+    const backbonePaths = focusedSimulation || !layers.fibers
+      ? []
+      : refreshedArcsData
+          .filter((arc) => haversineKm(arc.startLat, arc.startLng, arc.endLat, arc.endLng) > 3500)
+          .map((arc) => ({
+            coords: [
+              [arc.startLat, arc.startLng],
+              [arc.endLat, arc.endLng],
+            ],
+          }));
+    globe.pathsData(backbonePaths);
+    globe.arcAltitude(focusedSimulation ? 0 : 0.28);
     const isLightTheme = false;
     const isPacketLossMode = STATE.simulationMode === 'packet-loss';
     const isCableCutMode = STATE.simulationMode === 'cable-cut';
+    const isSimulationActive = STATE.simulationMode !== 'normal';
+    const simulatedConnection = STATE.selectedArc !== null ? CONNECTIONS[STATE.selectedArc] : null;
+    const simulatedCityIds = new Set<string>();
+    if (isSimulationActive && simulatedConnection) {
+      simulatedCityIds.add(simulatedConnection.from);
+      simulatedCityIds.add(simulatedConnection.to);
+    }
     const activeDecisionImpact =
       STATE.decisionImpact && STATE.decisionImpact.mode === STATE.simulationMode
         ? STATE.decisionImpact
@@ -314,10 +543,18 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           ? '#9a7d7d'
           : '#8c8f9f'
       : null;
-    const flickerMinOpacity = 0.28;
-    const flickerRange = 0.34;
+    const flickerMinOpacity = 0.48;
+    const flickerRange = 0.42;
     const accentColor = '#8e9fb2';
     const ringColor = 'rgba(142, 159, 178, 0.48)';
+    const simulationNodeColor =
+      STATE.simulationMode === 'high-load'
+        ? '#f6b84f'
+        : STATE.simulationMode === 'packet-loss'
+          ? '#ff7d7d'
+          : STATE.simulationMode === 'cable-cut'
+            ? '#ff4d4d'
+            : accentColor;
 
     // Helper: check if arc is connected to selected city
     const isArcConnectedToCity = (arcIndex: number, cityIndex: number): boolean => {
@@ -344,11 +581,13 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         }
       });
     }
+    simulatedCityIds.forEach((cityId) => highlightedCityIds.add(cityId));
 
     // Update point radius based on selection
     globe.pointRadius((d: any) => {
       const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
       const city = cityIndex >= 0 ? CITIES[cityIndex] : null;
+      if (city && simulatedCityIds.has(city.id)) return 0.98;
       if (city && highlightedCityIds.has(city.id)) return 0.92;
       return STATE.selectedCity === cityIndex ? 1.0 : 0.65;
     });
@@ -357,6 +596,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     globe.pointColor((d: any) => {
       const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
       const city = cityIndex >= 0 ? CITIES[cityIndex] : null;
+      if (city && simulatedCityIds.has(city.id) && isSimulationActive) {
+        return simulationNodeColor;
+      }
       if (city && highlightedCityIds.has(city.id) && activeDecisionImpact) {
         if (activeDecisionImpact.consequence.impactType === 'positive') {
           return '#8ba389';
@@ -371,24 +613,29 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
     // Update arc stroke width — thicker for selected, AND vary by congestion in high-load mode
     globe.arcStroke((d: any, i: number) => {
-      let baseStroke = 0.34;
+      const arcIndex = typeof d.arcIndex === 'number' ? d.arcIndex : i;
+      let baseStroke = focusedSimulation ? 0.22 : 0.34;
       
       // In high-load mode, vary thickness based on congestion
       if (STATE.simulationMode === 'high-load') {
-        const conn = CONNECTIONS[i];
+        const conn = CONNECTIONS[arcIndex];
         if (conn) {
           // congestionScore 0-100 → thickness multiplier 0.8-1.8
           const congestionFactor = 0.8 + (conn.congestionScore / 100) * 1.0;
           baseStroke = baseStroke * congestionFactor;
         }
+      } else if (isPacketLossMode) {
+        baseStroke = 0.42;
       }
       
-      if (STATE.selectedArc === i) return baseStroke + 0.22;
-      if (activeDecisionImpact && affectedArcIndices.has(i)) return baseStroke + 0.28;
+      if (STATE.selectedArc === arcIndex) {
+        return focusedSimulation ? baseStroke + 0.35 : isPacketLossMode ? baseStroke + 0.44 : baseStroke + 0.22;
+      }
+      if (activeDecisionImpact && affectedArcIndices.has(arcIndex)) return baseStroke + 0.28;
       return baseStroke;
     });
 
-    const dashLength = activeDecisionImpact
+    let dashLength = activeDecisionImpact
       ? activeDecisionImpact.mode === 'cable-cut'
         ? 0.08
         : activeDecisionImpact.mode === 'packet-loss'
@@ -397,18 +644,18 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       : isCableCutMode
         ? 0.12
         : isPacketLossMode
-          ? 0.18
+          ? 0.08
           : 0.25;
-    const dashGap = activeDecisionImpact
+    let dashGap = activeDecisionImpact
       ? activeDecisionImpact.mode === 'high-load'
         ? 0.45
         : 1.2
       : isCableCutMode
         ? 1.2
         : isPacketLossMode
-          ? 1.0
+          ? 1.9
           : 0.75;
-    const dashAnimateBase = activeDecisionImpact
+    let dashAnimateBase = activeDecisionImpact
       ? activeDecisionImpact.mode === 'packet-loss'
         ? 620
         : activeDecisionImpact.mode === 'high-load'
@@ -423,66 +670,59 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             : 1800;
     const dashAnimateJitter = isPacketLossMode ? 550 : 1200;
 
+    if (focusedSimulation) {
+      dashLength = 1;
+      dashGap = 0;
+      dashAnimateBase = 0;
+    }
+
     globe
       .arcDashLength(dashLength)
       .arcDashGap(dashGap)
-      .arcDashAnimateTime(() => dashAnimateBase + Math.random() * dashAnimateJitter);
+      .arcDashAnimateTime(() => (focusedSimulation ? 0 : dashAnimateBase + Math.random() * dashAnimateJitter));
 
     // Update arc color with opacity based on selection state AND simulation mode
     globe.arcColor((d: any, i: number) => {
+      const arcIndex = typeof d.arcIndex === 'number' ? d.arcIndex : i;
       let baseColor = d.color;
       let useFlickerOpacity = false;
+
+      if (focusedSimulation && STATE.selectedArc === arcIndex) {
+        baseColor = '#f7c955';
+      }
 
       // Override base color based on simulation mode
       if (STATE.simulationMode === 'high-load') {
         baseColor = '#7e8694';
+        if (STATE.selectedArc === arcIndex) {
+          baseColor = '#ffb347'; // Amber highlight
+        }
       } else if (isPacketLossMode) {
-        baseColor = '#877c84';
+        baseColor = '#8594a3';
+        if (STATE.selectedArc === arcIndex) {
+          baseColor = '#ff5b5b'; // Strong red highlight
+        }
         useFlickerOpacity = true;
       } else if (isCableCutMode) {
         baseColor = '#7a8694';
-        if (STATE.selectedArc === i) {
-          baseColor = '#9a7d7d';
+        if (STATE.selectedArc === arcIndex) {
+          baseColor = '#ff3333'; // Bright Red highlight
         }
       }
 
-      // If an arc is selected, dim all others to 15%
+      // If an arc is selected, dim all others significantly (2% opacity for focus)
       if (STATE.selectedArc !== null) {
-        if (STATE.selectedArc === i) {
+        if (STATE.selectedArc === arcIndex) {
           return baseColor; // Full opacity for selected arc
         }
-        return hexToRgba(baseColor, dimmedArcOpacity);
+        return hexToRgba(baseColor, isPacketLossMode ? 0.08 : 0.02);
       }
 
-      if (activeDecisionImpact) {
-        if (affectedArcIndices.has(i)) {
-          if (activeDecisionImpact.mode === 'packet-loss') {
-          if (activeDecisionImpact.consequence.impactType === 'negative') {
-              const pulseOpacity = 0.5 + Math.random() * 0.5;
-              return hexToRgba('#9a7d7d', pulseOpacity);
-            }
-            return '#8ba389';
-          }
 
-          if (activeDecisionImpact.mode === 'cable-cut') {
-            return activeDecisionImpact.consequence.impactType === 'negative' ? '#9a7d7d' : '#7f92a3';
-          }
-
-          return activeDecisionImpact.consequence.impactType === 'negative' ? '#9a7d7d' : '#8c8f9f';
-        }
-        if (
-          activeDecisionImpact.mode === 'high-load' &&
-          activeDecisionImpact.consequence.impactType === 'negative' &&
-          affectedArcIndices.size === 0
-        ) {
-          return hexToRgba(baseColor, 0.92);
-        }
-        return hexToRgba(baseColor, 0.14);
-      }
 
       // If a city is selected, dim arcs not connected to it
       if (STATE.selectedCity !== null) {
-        if (isArcConnectedToCity(i, STATE.selectedCity)) {
+        if (isArcConnectedToCity(arcIndex, STATE.selectedCity)) {
           // In packet loss mode, add flickering via varying opacity
           if (useFlickerOpacity) {
             const flickerOpacity = flickerMinOpacity + Math.random() * flickerRange;
@@ -507,14 +747,22 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     const ringsData =
       STATE.selectedCity !== null
         ? [CITIES[STATE.selectedCity]]
-        : CITIES.filter((city) => highlightedCityIds.has(city.id));
+        : CITIES.filter((city) => highlightedCityIds.has(city.id) || simulatedCityIds.has(city.id));
 
     globe
       .ringsData(ringsData)
-      .ringColor(() => decisionAccentColor ? hexToRgba(decisionAccentColor, 0.6) : ringColor)
-      .ringMaxRadius(activeDecisionImpact ? 3.4 : 2)
-      .ringPropagationSpeed(activeDecisionImpact ? 3 : 2)
-      .ringRepeatPeriod(activeDecisionImpact ? 900 : 1500);
+      .ringColor(() => {
+        if (decisionAccentColor) return hexToRgba(decisionAccentColor, 0.6);
+        if (simulatedConnection) {
+          if (STATE.simulationMode === 'high-load') return 'rgba(251, 191, 36, 0.72)';
+          if (STATE.simulationMode === 'packet-loss') return 'rgba(248, 113, 113, 0.72)';
+          if (STATE.simulationMode === 'cable-cut') return 'rgba(239, 68, 68, 0.8)';
+        }
+        return ringColor;
+      })
+      .ringMaxRadius(activeDecisionImpact ? 3.4 : simulatedConnection ? 3.1 : 2)
+      .ringPropagationSpeed(activeDecisionImpact ? 3 : simulatedConnection ? 2.8 : 2)
+      .ringRepeatPeriod(activeDecisionImpact ? 900 : simulatedConnection ? 760 : 1500);
 
     // Packet loss mode: trigger periodic re-render for flickering effect
     if (STATE.simulationMode === 'packet-loss') {
@@ -523,7 +771,15 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     }
 
     // Cable cut mode: add labels/markers for selected arc
-    const labelsData: Array<{ lat: number; lng: number; text: string; color: string; size: number }> = [];
+    const labelsData: Array<{
+      lat: number;
+      lng: number;
+      text: string;
+      color: string;
+      size: number;
+      altitude?: number;
+      isCritical?: boolean;
+    }> = [];
 
     if (activeDecisionImpact && affectedArcIndices.size > 0) {
       const decisionMarkerText = getDecisionMarker(
@@ -570,56 +826,86 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           });
       });
     } else if (isPacketLossMode && arcsDataRef.current.length > 0) {
-      const step = Math.max(1, Math.floor(arcsDataRef.current.length / 5));
-      for (let i = 0; i < arcsDataRef.current.length && labelsData.length < 5; i += step) {
-        const arc = arcsDataRef.current[i];
-        labelsData.push({
-          lat: (arc.startLat + arc.endLat) / 2,
-          lng: (arc.startLng + arc.endLng) / 2,
-          text: '↺',
-          color: '#8a8088',
-          size: 1.05,
-        });
+      if (STATE.selectedArc !== null) {
+        const lossArc = arcsDataRef.current.find((arc) => arc.arcIndex === STATE.selectedArc);
+        if (lossArc) {
+          const midLat = (lossArc.startLat + lossArc.endLat) / 2;
+          const midLng = (lossArc.startLng + lossArc.endLng) / 2;
+          labelsData.push(
+            {
+              lat: midLat,
+              lng: midLng,
+              text: '↺',
+              color: '#ffe4e6',
+              size: 2.9,
+              altitude: 0.2,
+              isCritical: true,
+            },
+            {
+              lat: midLat + 0.75,
+              lng: midLng,
+              text: 'Retry',
+              color: '#fecaca',
+              size: 1.28,
+              altitude: 0.17,
+              isCritical: true,
+            },
+          );
+        }
+      } else {
+        const step = Math.max(1, Math.floor(arcsDataRef.current.length / 5));
+        for (let i = 0; i < arcsDataRef.current.length && labelsData.length < 5; i += step) {
+          const arc = arcsDataRef.current[i];
+          labelsData.push({
+            lat: (arc.startLat + arc.endLat) / 2,
+            lng: (arc.startLng + arc.endLng) / 2,
+            text: '↺',
+            color: '#fca5a5',
+            size: 1.12,
+          });
+        }
       }
     }
 
     if (isCableCutMode && arcsDataRef.current.length > 0) {
       if (STATE.selectedArc !== null) {
-        const cutArc = arcsDataRef.current[STATE.selectedArc];
+        const cutArc = arcsDataRef.current.find((arc) => arc.arcIndex === STATE.selectedArc);
         const conn = CONNECTIONS[STATE.selectedArc];
+        if (!cutArc) return;
+        const cableCutReasonText = getCableCutReasonText(scenarioStory, conn);
+        const interpolateLatLng = (t: number) => interpolateGreatCircle(cutArc.startLat, cutArc.startLng, cutArc.endLat, cutArc.endLng, t);
+        const startMark = interpolateLatLng(0.2);
+        const endMark = interpolateLatLng(0.8);
+        const midPoint = interpolateLatLng(0.5);
         
-        labelsData.push(
+        dynamicHtmlElements.push(
           {
-            lat: (cutArc.startLat + cutArc.endLat) / 2,
-            lng: (cutArc.startLng + cutArc.endLng) / 2,
-            text: '✕',
-            color: '#9a7d7d',
-            size: 1.6,
+            type: 'cable-cut-x',
+            lat: startMark.lat,
+            lng: startMark.lng,
           },
           {
-            lat: cutArc.startLat,
-            lng: cutArc.startLng,
-            text: '⚠',
-            color: '#9a7d7d',
-            size: 1.0,
+            type: 'cable-cut-x',
+            lat: endMark.lat,
+            lng: endMark.lng,
           },
           {
-            lat: cutArc.endLat,
-            lng: cutArc.endLng,
-            text: '⚠',
-            color: '#9a7d7d',
-            size: 1.0,
-          },
+            type: 'cable-cut-tooltip',
+            lat: midPoint.lat,
+            lng: midPoint.lng,
+            text: cableCutReasonText,
+          }
         );
         
         // Add backup route indicator when alternatives exist
         if (conn && conn.backupRouteIds.length > 0) {
           labelsData.push({
-            lat: (cutArc.startLat + cutArc.endLat) / 2 + 0.5,
-            lng: (cutArc.startLng + cutArc.endLng) / 2,
+            lat: midPoint.lat + 1.08,
+            lng: midPoint.lng,
             text: 'Reroute',
             color: '#8ba389',
             size: 0.85,
+            altitude: 0.12,
           });
         }
       } else {
@@ -634,7 +920,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     }
 
     // Add native flat center dots for all visible cities
-    const cityLabelDots = buildVisibleCityPoints().map((city: any) => {
+    const cityLabelDots = layers.rings ? buildVisibleCityPoints().map((city: any) => {
       const cityIndex = typeof city.cityIndex === 'number' ? city.cityIndex : CITIES.findIndex((c) => c.id === city.id);
       return {
         lat: city.lat,
@@ -645,7 +931,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         isCityDot: true,
         cityIndex,
       };
-    });
+    }) : [];
     
     const finalLabelsData = [...labelsData, ...cityLabelDots];
 
@@ -656,8 +942,21 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .labelText('text')
       .labelSize('size')
       .labelColor('color')
-      .labelDotRadius((d: any) => d.isCityDot ? (STATE.selectedCity === d.cityIndex ? 1.2 : 0.8) : (activeDecisionImpact ? 0.65 : 0.3))
-      .labelAltitude((d: any) => d.isCityDot ? 0.005 : (activeDecisionImpact ? 0.06 : 0.01))
+      .labelDotRadius((d: any) => {
+        if (d.isCityDot) return STATE.selectedCity === d.cityIndex ? 1.2 : 0.8;
+        if (d.isCritical) return 0;
+        return activeDecisionImpact ? 0.65 : 0.3;
+      })
+      .labelAltitude((d: any) => {
+        if (d.isCityDot) return 0.005;
+        if (typeof d.altitude === 'number') return d.altitude;
+        return activeDecisionImpact ? 0.08 : 0.03;
+      })
+      .htmlAltitude((d: any) => {
+        if (d.type === 'cable-cut-x' || d.type === 'cable-cut-tooltip') return 0;
+        return d.type === 'company-hub' ? 0.03 : (d.type === 'satellite' ? 0.18 : 0.015);
+      })
+      .htmlElementsData(dynamicHtmlElements)
       .onLabelClick((d: any) => {
         if (d.isCityDot) {
           const clickedIndex = d.cityIndex;
@@ -675,7 +974,11 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .onLabelHover((label: any) => {
         if (globeRef.current && globeRef.current.controls()) {
           // Pause rotation if hovering a label OR if a city/arc is already selected
-          globeRef.current.controls().autoRotate = !label && STATE.selectedCity === null && STATE.selectedArc === null;
+          globeRef.current.controls().autoRotate =
+            !label &&
+            STATE.selectedCity === null &&
+            STATE.selectedArc === null &&
+            !rotationLockedRef.current;
           // Change cursor to pointer
           if (containerRef.current) {
             containerRef.current.style.cursor = label ? 'pointer' : 'grab';
@@ -689,12 +992,13 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const arcsData = CONNS.map(([i, j, col]) => ({
+    const arcsData = CONNS.map(([i, j, col], arcIndex) => ({
       startLat: CITIES[i].lat,
       startLng: CITIES[i].lng,
       endLat: CITIES[j].lat,
       endLng: CITIES[j].lng,
       color: RESOLVED_ARC_COLORS[col],
+      arcIndex,
     }));
     const visibleCityPoints = buildVisibleCityPoints();
     const globeOverlayData = buildVisibleOverlayData();
@@ -751,7 +1055,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .pathPoints('coords')
       .pathPointLat((p: any) => p[0])
       .pathPointLng((p: any) => p[1])
-      .pathColor(() => 'rgba(234, 179, 8, 0.85)')
+      .pathColor(() => {
+        if (STATE.simulationMode === 'packet-loss') return 'rgba(248, 113, 113, 0.26)';
+        if (STATE.simulationMode === 'high-load') return 'rgba(251, 191, 36, 0.38)';
+        if (STATE.simulationMode === 'cable-cut') return 'rgba(248, 113, 113, 0.34)';
+        return 'rgba(234, 179, 8, 0.78)';
+      })
       .pathStroke(1.2)
       // Arcs / streams
       .arcsData(arcsData)
@@ -762,18 +1071,33 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .arcColor('color')
       .arcAltitude(0.28)
       .arcStroke(0.34)
-      .arcDashLength(0.18)
-      .arcDashGap(1.1)
-      .arcDashAnimateTime(() => 2400 + Math.random() * 800)
+      .arcDashLength(() => {
+        if (STATE.simulationMode === 'high-load') return 0.05; // Dense bunched up packets
+        if (STATE.simulationMode === 'packet-loss') return 0.01; // Broken sparse dots
+        return 0.18; // Normal
+      })
+      .arcDashGap(() => {
+        if (STATE.simulationMode === 'high-load') return 0.08; // Close together (traffic jam)
+        if (STATE.simulationMode === 'packet-loss') return 1.8; // Dropped / huge gaps
+        return 1.1; // Normal
+      })
+      .arcDashAnimateTime(() => {
+        const base = 2400 + Math.random() * 800;
+        if (STATE.simulationMode === 'high-load') return base * 4.5; // Slow down massively
+        if (STATE.simulationMode === 'packet-loss') return base * 0.4; // Frantic retries
+        return base;
+      })
       .arcsTransitionDuration(0)
       .onArcClick((arc: any, event: any, { lat, lng, altitude }: any) => {
         // Find the index of the clicked arc in CONNS array
-        const clickedIndex = arcsData.findIndex(a =>
-          a.startLat === arc.startLat &&
-          a.startLng === arc.startLng &&
-          a.endLat === arc.endLat &&
-          a.endLng === arc.endLng
-        );
+        const clickedIndex = typeof arc.arcIndex === 'number'
+          ? arc.arcIndex
+          : arcsDataRef.current.findIndex(a =>
+            a.startLat === arc.startLat &&
+            a.startLng === arc.startLng &&
+            a.endLat === arc.endLat &&
+            a.endLng === arc.endLng
+          );
 
         if (clickedIndex !== -1) {
           STATE.selectedArc = STATE.selectedArc === clickedIndex ? null : clickedIndex;
@@ -813,7 +1137,6 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .htmlElementsData(globeOverlayData)
       .htmlLat((d: any) => d.lat)
       .htmlLng((d: any) => d.lng)
-      .htmlAltitude((d: any) => d.type === 'company-hub' ? 0.03 : (d.type === 'satellite' ? 0.18 : 0.015))
       .htmlElement((d: any) => {
         if (d.type === 'company-hub') {
           const wrap = document.createElement('div');
@@ -867,6 +1190,66 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
           wrap.appendChild(square);
           wrap.appendChild(label);
+          return wrap;
+        } else if (d.type === 'cable-cut-x') {
+          const wrap = document.createElement('div');
+          wrap.style.cssText = `
+            color: #ef4444;
+            font-size: 24px;
+            font-weight: 800;
+            font-family: var(--sans);
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 4px #000;
+            transform: translate(-50%, -50%);
+            user-select: none;
+            pointer-events: none;
+          `;
+          wrap.textContent = 'X';
+          return wrap;
+        } else if (d.type === 'cable-cut-tooltip') {
+          const wrap = document.createElement('div');
+          wrap.style.cssText = `
+            background: #fff7ed;
+            border: 2px solid #f97316;
+            border-radius: 12px;
+            padding: 8px 14px;
+            color: #c2410c;
+            font-family: var(--sans);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            max-width: 160px;
+            transform: translate(-50%, calc(-100% - 8px));
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            user-select: none;
+            pointer-events: none;
+            position: relative;
+            white-space: normal;
+          `;
+          const pointer = document.createElement('div');
+          pointer.style.cssText = `
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 8px 8px 0;
+            border-style: solid;
+            border-color: #f97316 transparent transparent transparent;
+          `;
+          const pointerInner = document.createElement('div');
+          pointerInner.style.cssText = `
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px 6px 0;
+            border-style: solid;
+            border-color: #fff7ed transparent transparent transparent;
+          `;
+          wrap.textContent = d.text;
+          wrap.appendChild(pointer);
+          wrap.appendChild(pointerInner);
           return wrap;
         } else if (d.type === 'satellite') {
           const wrap = document.createElement('div');
@@ -949,6 +1332,13 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         console.log('🌍 Background clicked — Reset all selections');
         render();
       }
+      if (rotationLockedRef.current) {
+        rotationLockedRef.current = false;
+        const controls = globeRef.current?.controls?.();
+        if (controls && STATE.selectedCity === null && STATE.selectedArc === null) {
+          controls.autoRotate = true;
+        }
+      }
     });
 
     globeRef.current = globe;
@@ -988,10 +1378,10 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
   useEffect(() => {
     if (!globeRef.current) return;
     globeRef.current
-      .ringsData(buildVisibleCityPoints())
+      .ringsData(layers.rings ? buildVisibleCityPoints() : [])
       .htmlElementsData(buildVisibleOverlayData());
     render();
-  }, [visibleCityIds]);
+  }, [visibleCityIds, layers.rings]);
 
   useEffect(() => {
     if (!globeRef.current || !decisionImpact || decisionImpact.mode !== simulationMode) return;
@@ -1123,26 +1513,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     };
   }, [selectedCity]);
 
-  useEffect(() => {
-    if (!isSimulationMenuOpen) return;
 
-    const handleWindowMouseDown = (event: MouseEvent) => {
-      if (simulationMenuRef.current?.contains(event.target as Node)) return;
-      setIsSimulationMenuOpen(false);
-    };
-    const handleWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsSimulationMenuOpen(false);
-      }
-    };
-
-    window.addEventListener('mousedown', handleWindowMouseDown);
-    window.addEventListener('keydown', handleWindowKeyDown);
-    return () => {
-      window.removeEventListener('mousedown', handleWindowMouseDown);
-      window.removeEventListener('keydown', handleWindowKeyDown);
-    };
-  }, [isSimulationMenuOpen]);
 
   useImperativeHandle(ref, () => ({
     globeRef,
@@ -1173,39 +1544,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         detail: `Highlighting ${decisionImpact.consequence.affectedRoutes.length} affected routes and key hubs.`,
       }
     : null;
-  const activeMode = simulationMode || 'normal';
-  const simulationModes = [
-    { id: 'normal', label: 'Normal', tone: 'normal' },
-    { id: 'high-load', label: 'Rush Hour', tone: 'warn' },
-    { id: 'packet-loss', label: 'Packet Loss', tone: 'loss' },
-    { id: 'cable-cut', label: 'Cable Break', tone: 'danger' },
-  ] as const;
-  const simulationModeInfo: Record<string, { title: string; detail: string; tone: string }> = {
-    normal: {
-      title: 'Normal',
-      detail: 'Traffic is balanced and routes stay stable with no major rerouting.',
-      tone: 'normal',
-    },
-    'high-load': {
-      title: 'Rush Hour',
-      detail: 'Demand spikes increase route pressure and can raise waiting time.',
-      tone: 'warn',
-    },
-    'packet-loss': {
-      title: 'Packet Loss',
-      detail: 'Some data packets drop and must be re-sent, causing unstable flow.',
-      tone: 'loss',
-    },
-    'cable-cut': {
-      title: 'Cable Break',
-      detail:
-        selectedArc !== null
-          ? 'The selected route is cut and traffic is rerouted to backup paths.'
-          : 'Select a route to cut and inspect outage impact and rerouting behavior.',
-      tone: 'danger',
-    },
-  };
-  const activeModeInfo = simulationModeInfo[activeMode] ?? simulationModeInfo.normal;
+
+  const simulationRouteCities =
+    simulationMode !== 'normal' && selectedArc !== null
+      ? getRouteCities()
+      : null;
+
   const legendItems = getGlobeLegendItems(simulationMode, decisionImpact);
 
   const closeCityDialog = () => {
@@ -1227,14 +1571,6 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     onResetAll?.();
   };
 
-  const handleSimulationControlClick = (mode: string) => {
-    setIsSimulationMenuOpen(false);
-    if (onSimulationSelect) {
-      onSimulationSelect(mode);
-      return;
-    }
-    onModeChange(mode);
-  };
 
   return (
     <div className="globe-section">
@@ -1242,42 +1578,8 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       <button className="globe-reset-all-btn" onClick={handleResetAll}>
         Reset view
       </button>
-      <div ref={simulationMenuRef} className="globe-sim-menu">
-        <button
-          className={`globe-sim-menu-trigger ${isSimulationMenuOpen ? 'is-open' : ''}`}
-          onClick={() => setIsSimulationMenuOpen(prev => !prev)}
-          aria-label="Open simulation mode menu"
-          aria-expanded={isSimulationMenuOpen}
-          aria-haspopup="dialog"
-        >
-          <span className="globe-sim-menu-lines" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </span>
-        </button>
-        {isSimulationMenuOpen && (
-          <div className="globe-sim-controls" role="dialog" aria-label="Simulation mode selection">
-            <div className="globe-sim-menu-title">Simulation mode</div>
-            <div className="globe-sim-chips">
-              {simulationModes.map((mode) => (
-                <button
-                  key={mode.id}
-                  className={`globe-sim-chip globe-sim-chip--${mode.tone} ${activeMode === mode.id ? 'globe-sim-chip--active' : ''}`}
-                  onClick={() => handleSimulationControlClick(mode.id)}
-                >
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-            <div className={`globe-sim-info globe-sim-info--${activeModeInfo.tone}`}>
-              <div className="globe-sim-info-title">{activeModeInfo.title}</div>
-              <div className="globe-sim-info-detail">{activeModeInfo.detail}</div>
-            </div>
-          </div>
-        )}
-      </div>
-      <PacketDots globeRef={globeRef} />
+
+      {layers.packets && <PacketDots globeRef={globeRef} />}
       {hintVisible && (
         <div className="globe-hint">
           Tap any city to begin
@@ -1289,6 +1591,92 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           <div className="globe-sim-badge-detail">{decisionBadge.detail}</div>
         </div>
       )}
+      {simulationRouteCities && (
+        <div className="globe-sim-route">
+          <div className="globe-sim-route-title">Active route</div>
+          <div className="globe-sim-route-cards">
+            {[simulationRouteCities.fromCity, simulationRouteCities.toCity].map((city) => (
+              <div key={city.id} className="globe-sim-route-card">
+                <div className="globe-sim-route-flag">
+                  <img
+                    src={flagImgUrl(city.countryCode)}
+                    width={24}
+                    height={18}
+                    alt={city.countryCode}
+                  />
+                </div>
+                <div className="globe-sim-route-meta">
+                  <div className="globe-sim-route-name">
+                    {new Intl.DisplayNames(['en'], { type: 'region' }).of(city.countryCode)}, {city.name}
+                  </div>
+                  <div className="globe-sim-route-note">{city.friendlyFact}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Layer Toggle Menu */}
+      <div className="absolute top-[18px] right-[18px] z-50">
+        <DropdownMenu open={layerMenuOpen} onOpenChange={setLayerMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="bg-slate-900/60 backdrop-blur-md border-slate-700/50 text-slate-200 hover:bg-slate-800 hover:text-white"
+              title="Toggle view"
+            >
+              <Layers className="size-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent 
+            align="end" 
+            side="bottom"
+            sideOffset={10}
+            className="z-50 w-[290px] !p-0 border-none bg-transparent shadow-none"
+          >
+            <div className="globe-legend !relative !right-auto !bottom-auto !w-full !pointer-events-auto">
+              <div className="globe-legend-title">View Options</div>
+              
+              <div className="globe-legend-list">
+                {[
+                  { id: 'arcs', label: 'Network backbone', symbol: '—', tone: 'arc' },
+                  { id: 'fibers', label: 'Subsea fiber', symbol: '-', tone: 'fiber' },
+                  { id: 'packets', label: 'Data packets', symbol: '••', tone: 'packet' },
+                  { id: 'rings', label: 'Internet hubs', symbol: '●', tone: 'hub' },
+                  { id: 'hubs', label: 'Company datacenters', symbol: '🏢', tone: 'infra' },
+                  { id: 'satellites', label: 'Starlink (LEO)', symbol: 'SAT', tone: 'sat' },
+                ].map(layer => (
+                  <DropdownMenuItem
+                    key={layer.id}
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setLayers(prev => ({ ...prev, [layer.id]: !prev[layer.id] }));
+                    }}
+                    className="globe-legend-item !items-center !justify-between !bg-transparent !border-none !cursor-pointer focus:!bg-white/5 !rounded-md !p-1 !-m-1 transition-colors"
+                  >
+                    <div className="flex items-center gap-[8px]">
+                      <span className={`globe-legend-symbol globe-legend-symbol--${layer.tone}`}>
+                        {layer.symbol}
+                      </span>
+                      <span className="font-sans text-[12px] text-[var(--globe-overlay-text)]">
+                        {layer.label}
+                      </span>
+                    </div>
+                    <Switch 
+                      checked={layers[layer.id as keyof typeof layers]}
+                      onCheckedChange={() => {}} // Handled by DropdownMenuItem to prevent double toggle
+                      className="pointer-events-none h-4 w-7 data-[state=checked]:bg-sky-500 data-[state=unchecked]:bg-[var(--globe-overlay-bg)] shadow-[inset_0_0_0_1px_var(--globe-overlay-border)] [&_[data-slot=switch-thumb]]:size-3 data-[state=checked]:[&_[data-slot=switch-thumb]]:translate-x-3 transition-colors"
+                    />
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
       <div className="globe-legend">
         <div className="globe-legend-title">Globe legend</div>
         <div className="globe-legend-list">

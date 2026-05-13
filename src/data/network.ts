@@ -508,7 +508,7 @@ export const CHIP_QUESTIONS: Record<string, string[]> = {
   dxb: ['Why is Dubai a transit hub?', 'What\'s special about this location?', 'How does it connect continents?'],
   fra: ['Why is Frankfurt so big?', 'What\'s special about this hub?', 'How does Europe route traffic?'],
   sao: ['How is South America connected?', 'Why is São Paulo important?', 'What cables reach here?'],
-  default: ['How does internet travel?', 'What are submarine cables?', 'Why are some routes faster?']
+  default: ['Tell me history about internet', 'How internet works', 'What are the important components of internet?']
 };
 
 export const CITY_ALIASES: Record<string, string> = {
@@ -537,6 +537,9 @@ export const CITY_ALIASES: Record<string, string> = {
   'sao paulo': 'sao',
   'south america': 'sao',
   'new york': 'nyc',
+  newyork: 'nyc',
+  'new-york': 'nyc',
+  'new york city': 'nyc',
   nyc: 'nyc',
   'los angeles': 'lax',
   la: 'lax',
@@ -579,6 +582,25 @@ export function resolveCityId(input: string): string | null {
   return null;
 }
 
+export function resolveCityIdStrict(input: string): string | null {
+  const normalizedInput = normalizeCityKey(input);
+  if (!normalizedInput) return null;
+
+  const directId = CITIES.find(
+    city =>
+      normalizeCityKey(city.id) === normalizedInput ||
+      normalizeCityKey(city.name) === normalizedInput,
+  );
+  if (directId) return directId.id;
+
+  const containsCity = CITIES.find(city =>
+    normalizedInput.includes(normalizeCityKey(city.name)),
+  );
+  if (containsCity) return containsCity.id;
+
+  return null;
+}
+
 export function resolveCityIndex(input: string): number {
   const resolvedCityId = resolveCityId(input);
   if (!resolvedCityId) return -1;
@@ -592,8 +614,28 @@ export function resolveCityIndex(input: string): number {
 // Map city IDs to array indices
 const cityIdToIndex = new Map(CITIES.map((city, i) => [city.id, i]));
 
-// Convert CONNECTIONS to index-based format for globe.gl
-export const CONNS = CONNECTIONS.map(conn => {
+type ArcColorKey = 'amber' | 'teal' | 'steel';
+
+const resolveArcColorKey = (conn: Connection): ArcColorKey => {
+  if (conn.type !== 'Subsea cable') return 'amber';
+
+  if (
+    conn.cable.includes('FASTER') ||
+    conn.cable.includes('SEA-US') ||
+    conn.cable.includes('AEC-1') ||
+    conn.cable.includes('TAT-14')
+  ) {
+    return 'amber';
+  }
+
+  if (conn.cable.includes('SEA-ME-WE') || conn.cable.includes('FLAG')) {
+    return 'teal';
+  }
+
+  return 'steel';
+};
+
+const toConnTuple = (conn: Connection): readonly [number, number, ArcColorKey] => {
   const fromIdx = cityIdToIndex.get(conn.from);
   const toIdx = cityIdToIndex.get(conn.to);
   if (fromIdx === undefined || toIdx === undefined) {
@@ -601,29 +643,42 @@ export const CONNS = CONNECTIONS.map(conn => {
     return [0, 0, 'amber'] as const;
   }
 
-  // Assign colors based on connection type
-  let color: 'amber' | 'teal' | 'steel';
-  if (conn.type === 'Subsea cable') {
-    // Transpacific/Transatlantic: amber, Asia-Europe: teal, Americas/Oceania: steel
-    if (conn.cable.includes('FASTER') || conn.cable.includes('SEA-US') || conn.cable.includes('AEC-1') || conn.cable.includes('TAT-14')) {
-      color = 'amber';
-    } else if (conn.cable.includes('SEA-ME-WE') || conn.cable.includes('FLAG')) {
-      color = 'teal';
-    } else {
-      color = 'steel';
-    }
-  } else {
-    color = 'amber'; // Land cables
-  }
+  return [fromIdx, toIdx, resolveArcColorKey(conn)] as const;
+};
 
-  return [fromIdx, toIdx, color] as const;
-});
+// Convert CONNECTIONS to index-based format for globe.gl
+export const CONNS = CONNECTIONS.map(conn => toConnTuple(conn));
 
 export const ARC_COLORS: Record<string, string> = {
   amber: '#fcd34d', // Bright glowing yellow-amber
   teal: '#2dd4bf',  // Bright glowing teal
   steel: '#38bdf8', // Bright glowing sky blue
 };
+
+/**
+ * Ensure a direct route exists between two cities.
+ * If absent, creates an auto connection so simulation always has a visible path.
+ */
+export function ensureDirectConnection(fromInput: string, toInput: string): number | null {
+  const fromId = resolveCityId(fromInput) ?? fromInput;
+  const toId = resolveCityId(toInput) ?? toInput;
+  if (!fromId || !toId || fromId === toId) return null;
+  if (!cityIdToIndex.has(fromId) || !cityIdToIndex.has(toId)) return null;
+
+  const existingIndex = CONNECTIONS.findIndex(
+    (conn) =>
+      (conn.from === fromId && conn.to === toId) ||
+      (conn.from === toId && conn.to === fromId),
+  );
+  if (existingIndex >= 0) return existingIndex;
+
+  const generated = buildAutoConnection(fromId, toId);
+  if (!generated) return null;
+
+  CONNECTIONS.push(generated);
+  CONNS.push(toConnTuple(generated));
+  return CONNECTIONS.length - 1;
+}
 
 // ═══════════════════════════════════════════════════════════
 // HELPER FUNCTIONS — Fase 1 data utility exports

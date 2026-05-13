@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import type { KeyboardEvent } from 'react';
-import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse, type DecisionResponse } from '../hooks/useGeminiChat';
+import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse, type DecisionResponse, type ScenarioResponse } from '../hooks/useGeminiChat';
+import { CITIES, CONNECTIONS } from '../data/network';
 import { MissionCard } from './MissionCard';
-import { DecisionCard } from './DecisionCard';
 import { ModeComparePanel } from './ModeComparePanel';
 import type { Mission } from '../hooks/useAppState';
-import { getDecisionForMode, calculateConsequence, type DecisionVisualImpact } from '../utils/simulationDecisionEngine';
-import { getDecisionMarker, getDecisionMarkerMeaning } from '../utils/globeLegend';
+import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import './ChatInterface.css';
 
 interface DisplayMessage {
@@ -31,13 +30,14 @@ interface ChatInterfaceProps {
   compareMode: boolean;
   onJourney: (payload: JourneyResponse) => void;
   onScenario: (mode: string) => void;
-  onAction?: (action: 'SET_MODE' | 'FOCUS_CITY', payload: string) => void;
+  onAction?: (action: 'SET_MODE' | 'FOCUS_CITY' | 'SET_MODE_WITH_ARC', payload: string) => void;
   onMissionStart?: (mission: Mission) => void;
   onMissionComplete?: () => void;
   onMissionReset?: () => void;
   onToggleCompare?: () => void;
   onDecision?: (decisionPayload: DecisionResponse) => void;
   onDecisionApplied?: (impact: DecisionVisualImpact) => void;
+  onScenarioPayload?: (payload: ScenarioResponse) => void;
 }
 
 export interface ChatInterfaceRef {
@@ -45,68 +45,59 @@ export interface ChatInterfaceRef {
   applySimulationMode: (mode: string) => void;
 }
 
-type SimMode = 'high-load' | 'packet-loss' | 'cable-cut';
-
 const SIMULATION_PROMPTS: Record<string, string> = {
   normal:
-    'Set the network to normal mode. Explain in 3 short lines with these labels: "What you see:", "Why it happens:", "User impact:". Keep it plain English.',
+    'Set the network to normal mode. Explain with exactly 2 short lines: "What you see on map:" and "Why it happens:".',
   'high-load':
-    'Simulate rush hour / high load. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear real-world causes in plain English. End by asking me which priority I want to choose first.',
+    'Simulate rush hour / high load. Return type "scenario" JSON with mode, connector, fromId, toId, and story. Connector format: {"fromId":"cityId","toId":"cityId","createIfMissing":true}. Pick 2 random different cities for this simulation. Story must use exactly 2 lines with these labels: "What you see on map:", "Why it happens:". In "Why it happens", give 2–3 specific real-world examples (e.g. game launch, global live stream, viral social surge).',
   'packet-loss':
-    'Simulate packet loss. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Explain packet as small pieces of data and include clear causes. End by asking me which priority I want to choose first.',
+    'Simulate packet loss. Return type "scenario" JSON with mode, connector, fromId, toId, and story. Connector format: {"fromId":"cityId","toId":"cityId","createIfMissing":true}. Pick 2 random different cities for this simulation. Story must be exactly 2 short lines: "What you see on map:", "Why it happens:". Explain packet as small pieces of data. In "Why it happens", mention 2 realistic causes.',
   'cable-cut':
-    'Simulate a cable break. Explain in 3 short lines with labels "What you see:", "Why it happens:", "User impact:". Include clear causes like anchors or earthquakes in plain English. End by asking me which priority I want to choose first.',
+    'Simulate a cable break. Return type "scenario" JSON with mode, connector, fromId, toId, and story. Connector format: {"fromId":"cityId","toId":"cityId","createIfMissing":true}. Pick 2 random different cities for this simulation. Story must be exactly 2 short lines: "What you see on map:", "Why it happens:". Include clear causes like anchors or earthquakes.',
 };
 
-function toDecisionResponse(mode: SimMode): DecisionResponse {
-  const localDecision = getDecisionForMode(mode);
-  return {
-    type: 'decision',
-    mode: localDecision.mode,
-    question: localDecision.question,
-    options: localDecision.options.map(option => ({
-      id: option.id,
-      label: option.label,
-      description: option.description,
-    })),
-    recommended: localDecision.recommended,
-    why: localDecision.why,
-  };
-}
+type ScenarioConnector = {
+  fromId: string;
+  toId: string;
+  createIfMissing: boolean;
+};
 
-function buildPriorityFollowupPrompt(
-  mode: SimMode,
-  selectedOptionId: string,
-  selectedLabel: string,
-  summary: string,
-  tradeoff: string,
-  userExperience: string,
-): string {
-  const markerCode = getDecisionMarker(mode, selectedOptionId);
-  const markerMeaning = getDecisionMarkerMeaning(mode, selectedOptionId);
-  return [
-    `I chose this priority: ${selectedLabel}.`,
-    `Current mode: ${mode}.`,
-    `Observed result: ${summary}`,
-    `Tradeoff: ${tradeoff}`,
-    `User experience: ${userExperience}`,
-    `Globe legend marker now on routes: "${markerCode}" which means: ${markerMeaning}`,
-    'City markers: "+" means improving and "!" means under stress.',
-    'Now explain this choice for a complete beginner in plain English.',
-    'Include one short line that starts with "Globe legend:".',
-    'Respond as type "explain" with max 80 words and one simple analogy sentence.',
-    'Do not ask another question.',
-  ].join('\n');
-}
+type PendingScenario = {
+  mode: string;
+  connector: ScenarioConnector;
+};
+
+const pickRandomScenarioConnector = (): ScenarioConnector | null => {
+  if (CITIES.length < 2) return null;
+  const firstIndex = Math.floor(Math.random() * CITIES.length);
+  let secondIndex = Math.floor(Math.random() * (CITIES.length - 1));
+  if (secondIndex >= firstIndex) secondIndex += 1;
+
+  return {
+    fromId: CITIES[firstIndex].id,
+    toId: CITIES[secondIndex].id,
+    createIfMissing: true,
+  };
+};
+
+const toScenarioConnector = (payload: ScenarioResponse): ScenarioConnector | null => {
+  const connector = payload.connector;
+  const fromId = connector?.fromId ?? payload.fromId;
+  const toId = connector?.toId ?? payload.toId;
+  if (!fromId || !toId || fromId === toId) return null;
+  return {
+    fromId,
+    toId,
+    createIfMissing: connector?.createIfMissing !== false,
+  };
+};
 
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
-  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare, onDecision, onDecisionApplied }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare, onDecision, onDecisionApplied, onScenarioPayload }, ref) => {
     const [inputValue, setInputValue] = useState('');
-    const [activeDecision, setActiveDecision] = useState<DecisionResponse | null>(null);
-    const [pendingDecisionMode, setPendingDecisionMode] = useState<SimMode | null>(null);
-    const [decisionAppliedMode, setDecisionAppliedMode] = useState<SimMode | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
+    const pendingScenarioRef = useRef<PendingScenario | null>(null);
     const { messages, loading, error, lastPayload, send, clear, retry, chips } = useGeminiChat({
       selectedCity,
       selectedArc,
@@ -116,9 +107,19 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
     const displayMessages = useMemo<DisplayMessage[]>(() => {
       const parsed = messages.map((message, index): DisplayMessage => {
-        const text = message.parts[0]?.text ?? '';
+        let text = message.parts[0]?.text ?? '';
         const sender = message.role === 'user' ? 'user' : 'ai';
         const parsedResponse = sender === 'ai' ? parseModelResponse(text) : null;
+        // INTERCEPT USER MESSAGES TO SIMPLIFY CHIPS
+        if (sender === 'user') {
+          if (/Respond with JSON type "action"/i.test(text)) {
+            text = text.split('\n')[0] ?? text;
+          }
+          if (text.includes('Simulate rush hour')) text = 'Simulate rush hour';
+          else if (text.includes('Simulate packet loss')) text = 'Simulate packet loss';
+          else if (text.includes('Simulate a cable break')) text = 'Simulate a cable break';
+        }
+
         return {
           id: `${index + 2}`,
           text: parsedResponse?.text ?? text,
@@ -162,26 +163,48 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       if (lastPayload.type === 'journey') {
         onJourney(lastPayload);
       } else if (lastPayload.type === 'scenario') {
-        onScenario(lastPayload.mode);
-        setPendingDecisionMode(lastPayload.mode);
-        setDecisionAppliedMode(null);
-        setActiveDecision(toDecisionResponse(lastPayload.mode));
+        if (onAction) {
+          const pending = pendingScenarioRef.current;
+          const connector =
+            (pending ? pending.connector : null) ??
+            toScenarioConnector(lastPayload) ??
+            pickRandomScenarioConnector();
+          pendingScenarioRef.current = null;
+          const scenarioPayload = connector
+            ? {
+                ...lastPayload,
+                connector,
+                fromId: connector.fromId,
+                toId: connector.toId,
+                flowFromId: connector.fromId,
+                flowToId: connector.toId,
+              }
+            : lastPayload;
+          console.log('[Scenario] payload', scenarioPayload);
+          console.log('[Scenario] pending connector', pending);
+          console.log('[Scenario] resolved connector', connector);
+          onAction(
+            'SET_MODE_WITH_ARC',
+            JSON.stringify({
+              mode: lastPayload.mode,
+              ...(connector
+                ? {
+                    connector,
+                    fromId: connector.fromId,
+                    toId: connector.toId,
+                    flowFromId: connector.fromId,
+                    flowToId: connector.toId,
+                  }
+                : {}),
+            }),
+          );
+          onScenarioPayload?.(scenarioPayload);
+        } else {
+          onScenario(lastPayload.mode);
+          onScenarioPayload?.(lastPayload);
+        }
       } else if (lastPayload.type === 'action') {
         onAction?.(lastPayload.action, lastPayload.payload);
-        if (
-          lastPayload.action === 'SET_MODE' &&
-          (lastPayload.payload === 'high-load' ||
-            lastPayload.payload === 'packet-loss' ||
-            lastPayload.payload === 'cable-cut')
-        ) {
-          setPendingDecisionMode(lastPayload.payload);
-          setDecisionAppliedMode(null);
-          setActiveDecision(toDecisionResponse(lastPayload.payload));
-        } else if (lastPayload.action === 'SET_MODE' && lastPayload.payload === 'normal') {
-          setPendingDecisionMode(null);
-          setDecisionAppliedMode(null);
-          setActiveDecision(null);
-        }
       } else if (lastPayload.type === 'mission') {
         const mission: Mission = {
           id: lastPayload.id,
@@ -192,21 +215,13 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           status: 'inactive',
         };
         // Mission card will be rendered, user can click Start
-      } else if (lastPayload.type === 'decision') {
-        setActiveDecision(lastPayload);
-        setPendingDecisionMode(lastPayload.mode);
-        setDecisionAppliedMode(null);
-        onDecision?.(lastPayload);
       }
-    }, [lastPayload, onJourney, onScenario, onAction, onDecision]);
+    }, [lastPayload, onJourney, onScenario, onAction, onScenarioPayload]);
 
     useImperativeHandle(ref, () => ({
       reset: () => {
         clear();
         setInputValue('');
-        setActiveDecision(null);
-        setPendingDecisionMode(null);
-        setDecisionAppliedMode(null);
         handledPayloadRef.current = null;
       },
       applySimulationMode: (mode: string) => {
@@ -230,28 +245,28 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
 
     const handleCityFocusChip = async (cityId: string, prompt: string) => {
       if (sessionCapped || loading) return;
-      onAction?.('FOCUS_CITY', cityId);
       setInputValue('');
-      await send(prompt);
+      await send(
+        `${prompt}\nRespond with JSON type "action" using action "FOCUS_CITY", payload "${cityId}", and a short beginner-friendly message.`,
+      );
     };
 
-    // Direct simulation chips — trigger mode change + zoom out instantly,
-    // then also send the message so the AI explains it
-    const handleSimChip = async (mode: string, prompt: string = SIMULATION_PROMPTS[mode] ?? '') => {
+    const handleSimChip = async (mode: string) => {
       if (sessionCapped || loading) return;
-      // Trigger mode change immediately for instant visual feedback
-      onAction?.('SET_MODE', mode);
-      if (mode === 'normal') {
-        setActiveDecision(null);
-        setPendingDecisionMode(null);
-        setDecisionAppliedMode(null);
-      } else if (mode === 'high-load' || mode === 'packet-loss' || mode === 'cable-cut') {
-        setPendingDecisionMode(mode);
-        setDecisionAppliedMode(null);
-        setActiveDecision(null);
+      const basePrompt = SIMULATION_PROMPTS[mode] || '';
+      if (!basePrompt) return;
+
+      const connector = pickRandomScenarioConnector();
+      if (connector) {
+        pendingScenarioRef.current = { mode, connector };
+      } else {
+        pendingScenarioRef.current = null;
       }
-      // Send the prompt so AI explains what's happening
-      if (!prompt) return;
+
+      const connectorInstruction = connector
+        ? `Use this exact connector and city IDs (do not change them): {"fromId":"${connector.fromId}","toId":"${connector.toId}","createIfMissing":true}. Also set flowFromId and flowToId to the same values so dots move from fromId to toId.`
+        : '';
+      const prompt = [basePrompt, connectorInstruction].filter(Boolean).join('\n');
       setInputValue('');
       await send(prompt);
     };
@@ -271,21 +286,9 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       setInputValue('');
     };
 
-    // Determine active sim mode for chip highlighting
     const activeMode = simulationMode || 'normal';
-    useEffect(() => {
-      if (activeMode === 'normal') {
-        setPendingDecisionMode(null);
-        setDecisionAppliedMode(null);
-        setActiveDecision(null);
-      }
-    }, [activeMode]);
-
-    const shouldShowDecisionCard =
-      !!activeDecision &&
-      pendingDecisionMode === activeMode &&
-      decisionAppliedMode !== activeMode;
-    const canShowCompareControls = activeMode !== 'normal' && decisionAppliedMode === activeMode;
+    
+    const canShowCompareControls = activeMode !== 'normal';
     const closeCompareDialog = () => {
       if (compareMode) {
         onToggleCompare?.();
@@ -377,59 +380,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             </div>
           </div>
         ))}
-        {shouldShowDecisionCard && (
-          <div className="chat-message ai">
-            <div className="ai-dot" />
-            <div className="message-content-wrap decision-inline-wrap">
-              <div className="decision-inline-text">Which one should we prioritize?</div>
-              <DecisionCard
-                  decision={{
-                    id: activeDecision.mode,
-                    mode: activeDecision.mode,
-                    question: activeDecision.question,
-                    options: activeDecision.options.map((opt) => {
-                      const firstToken = opt.label.trim().split(' ')[0] ?? '';
-                      const hasIconPrefix = firstToken.length > 0 && !/^[A-Za-z0-9]+$/.test(firstToken);
-                      return {
-                        ...opt,
-                        label: hasIconPrefix ? opt.label.slice(firstToken.length).trim() : opt.label,
-                        emoji: hasIconPrefix ? firstToken : '',
-                      };
-                    }),
-                    recommended: activeDecision.recommended,
-                    why: activeDecision.why,
-                }}
-                onSelectOption={(optionId) => {
-                  const selectedOption = activeDecision.options.find((opt) => opt.id === optionId);
-                  if (selectedOption) {
-                    const consequence = calculateConsequence(activeDecision.mode, optionId);
-                    onDecisionApplied?.({
-                      mode: activeDecision.mode,
-                      selectedOptionId: optionId,
-                      selectedOptionLabel: selectedOption.label,
-                      consequence,
-                      appliedAt: Date.now(),
-                    });
-                    setDecisionAppliedMode(activeDecision.mode);
-                    setPendingDecisionMode(null);
-                    setActiveDecision(null);
-                    void send(
-                      buildPriorityFollowupPrompt(
-                        activeDecision.mode,
-                        optionId,
-                        selectedOption.label,
-                        consequence.summary,
-                        consequence.tradeoff,
-                        consequence.userExperience,
-                      ),
-                    );
-                  }
-                }}
-                isLoading={loading}
-              />
-            </div>
-          </div>
-        )}
         {loading && (
           <div className="chat-message ai">
             <div className="ai-dot" />
@@ -468,6 +418,16 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
         <button className="suggestion-chip city-chip" disabled={inputDisabled} onClick={() => void handleCityFocusChip('fra', "Focus on Frankfurt and tell me about DE-CIX")}>
           <img className="city-chip-flag" src="https://flagcdn.com/20x15/de.png" width={20} height={15} alt="DE" />
           <span className="city-chip-cc">DE</span> Frankfurt
+        </button>
+        <div className="chat-suggestions-label chat-suggestions-label--secondary">Simulate Events</div>
+        <button className="suggestion-chip action-chip" disabled={inputDisabled} onClick={() => void handleSimChip('high-load')}>
+          Rush Hour
+        </button>
+        <button className="suggestion-chip action-chip" disabled={inputDisabled} onClick={() => void handleSimChip('packet-loss')}>
+          Packet Loss
+        </button>
+        <button className="suggestion-chip action-chip" disabled={inputDisabled} onClick={() => void handleSimChip('cable-cut')}>
+          Cable Break
         </button>
         <div className="chat-suggestions-label chat-suggestions-label--secondary">Ask me</div>
         {chips.slice(0, 2).map((question, index) => (
@@ -525,38 +485,106 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
   const trimmed = text.trim();
   if (!trimmed) return { text: '', showGlobeHint: false };
 
-  const ensureSimulationBreakdown = (mode: string, raw: string): string => {
-    const causeFallback: Record<string, string> = {
-      'high-load':
-        'Why it happens: Demand spikes from live events and peak-hour usage can overload major routes.',
-      'packet-loss':
-        'Why it happens: Weak signal and noisy or congested links can drop small pieces of data, so they are re-sent.',
-      'cable-cut':
-        'Why it happens: Ship anchors and undersea earthquakes can physically damage a cable route.',
-      normal:
-        'Why it happens: Demand stays steady and routes remain healthy, so traffic stays balanced.',
+  const cityNameById = (cityId: string | undefined): string | null => {
+    if (!cityId) return null;
+    const city = CITIES.find((item) => item.id === cityId);
+    return city?.name ?? null;
+  };
+
+  const findRoute = (fromId: string | undefined, toId: string | undefined) => {
+    if (!fromId || !toId) return null;
+    return (
+      CONNECTIONS.find(
+        (conn) =>
+          (conn.from === fromId && conn.to === toId) ||
+          (conn.from === toId && conn.to === fromId),
+      ) ?? null
+    );
+  };
+
+  const readScenarioConnector = (
+    parsed: Record<string, unknown>,
+  ): { fromId?: string; toId?: string } => {
+    if (typeof parsed.connector === 'object' && parsed.connector !== null) {
+      const connector = parsed.connector as Record<string, unknown>;
+      if (typeof connector.fromId === 'string' && typeof connector.toId === 'string') {
+        return { fromId: connector.fromId, toId: connector.toId };
+      }
+    }
+
+    return {
+      fromId: typeof parsed.fromId === 'string' ? parsed.fromId : undefined,
+      toId: typeof parsed.toId === 'string' ? parsed.toId : undefined,
     };
-    const impactFallback: Record<string, string> = {
-      'high-load':
-        'User impact: Streaming buffers more often and apps may respond slower.',
-      'packet-loss':
-        'User impact: Calls may stutter, games can lag, and loading may feel unstable.',
-      'cable-cut':
-        'User impact: Traffic reroutes to longer paths, which can raise latency in affected regions.',
-      normal:
-        'User impact: Most apps feel stable and responsive.',
-    };
+  };
 
-    const content = raw.trim();
-    const hasWhat = /what you see:/i.test(content);
-    const hasWhy = /why it happens:|cause/i.test(content);
-    const hasImpact = /user impact:|impact/i.test(content);
+  const normalizeWhyForCableCut = (raw: string, routeType?: string): string => {
+    const lower = raw.toLowerCase();
+    if (/gempa|earthquake|bencana|tsunami|hurricane|storm|seismic|landslide/i.test(lower)) {
+      return 'A disaster event damaged the physical cable segment on this route.';
+    }
+    if (/laut|samudra|undersea|subsea|ocean|anchor|kapal|ship/i.test(lower) || routeType === 'Subsea cable') {
+      return 'The subsea cable on this route was damaged by ship anchor activity or seabed movement.';
+    }
+    return 'A physical cable failure on this route stopped traffic flow.';
+  };
 
-    const whatLine = hasWhat ? content : `What you see: ${content}`;
-    const whyLine = hasWhy ? '' : causeFallback[mode] ?? '';
-    const impactLine = hasImpact ? '' : impactFallback[mode] ?? '';
+  const RUSH_HOUR_REAL_EXAMPLES = [
+    'a massive online game update dropped (like a new Fortnite season or a Minecraft mega-patch), sending millions of players downloading gigabytes at once',
+    'a record-breaking live stream event — imagine 50 million people watching a world championship final at the same moment',
+    'a viral social media moment: a celebrity post or shocking news clip shared by hundreds of millions within hours',
+    'a new streaming season dropped on a popular platform (think a global hit series release), flooding servers with simultaneous viewers',
+    'a major software update (like a new iOS or Android version) pushed to hundreds of millions of devices at exactly the same time',
+    'a global sporting event like the FIFA World Cup final or the Olympics opening ceremony streamed live to billions',
+    'a popular online game\'s new season launch \u2014 players worldwide rushing to download patches and log in at the same time',
+  ];
 
-    return [whatLine, whyLine, impactLine].filter(Boolean).join('\n');
+  const buildVisualSummary = (
+    mode: string,
+    raw: string,
+    fromId?: string,
+    toId?: string,
+  ): string => {
+    const route = findRoute(fromId, toId);
+    const fromName = cityNameById(fromId) ?? route?.from.toUpperCase() ?? null;
+    const toName = cityNameById(toId) ?? route?.to.toUpperCase() ?? null;
+    const routeLabel = fromName && toName ? `${fromName} → ${toName}` : 'the selected route';
+
+    if (mode === 'high-load') {
+      const what = `What you see: Dense packet dots move along ${routeLabel}, and both end nodes pulse continuously.`;
+
+      // Pick 2 random real-world examples to show variety
+      const shuffled = [...RUSH_HOUR_REAL_EXAMPLES].sort(() => Math.random() - 0.5);
+      const example1 = shuffled[0];
+      const example2 = shuffled[1];
+
+      const baseReason =
+        route && route.congestionScore >= 70
+          ? 'This corridor is already one of the busiest routes on the map'
+          : 'Traffic demand on this route suddenly spiked';
+
+      const why = `Why it happens: ${baseReason}. Real-world triggers include events like ${example1}, or ${example2}. When millions of people do the same thing online at once, internet highways get jammed — just like road traffic during rush hour.`;
+      return `${what}\n${why}`;
+    }
+
+    if (mode === 'packet-loss') {
+      const what = `What you see: Dots move on ${routeLabel}, then stop at the retry point (↺) before sending again.`;
+      const why =
+        route?.riskType === 'wireless'
+          ? 'Why it happens: Signal instability on this wireless segment drops small pieces of data (called packets), forcing the network to resend them — like leaving a bad voicemail and calling back.'
+          : route?.riskType === 'congestion'
+            ? 'Why it happens: This route is too crowded — queue overflow causes packets to be dropped, so the sender retransmits them, similar to resending a text message that failed to deliver.'
+            : 'Why it happens: Link noise or congestion causes packets (small pieces of data) to go missing, so the network automatically retries, like re-sending a lost email attachment.';
+      return `${what}\n${why}`;
+    }
+
+    if (mode === 'cable-cut') {
+      const what = `What you see: Traffic on ${routeLabel} is cut off and marked with a large X icon.`;
+      const why = `Why it happens: ${normalizeWhyForCableCut(raw, route?.type)}`;
+      return `${what}\n${why}`;
+    }
+
+    return 'What you see: Routes are flowing normally with steady packet movement.\nWhy it happens: No major disruption is currently simulated.';
   };
 
   try {
@@ -570,11 +598,10 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
       return { text: analogy ? `${content}\n\n${analogy}` : content, showGlobeHint: false };
     }
     if (parsed.type === 'scenario' && typeof parsed.story === 'string') {
+      const mode = typeof parsed.mode === 'string' ? parsed.mode : '';
+      const { fromId, toId } = readScenarioConnector(parsed);
       return {
-        text: ensureSimulationBreakdown(
-          typeof parsed.mode === 'string' ? parsed.mode : '',
-          parsed.story,
-        ),
+        text: buildVisualSummary(mode, parsed.story, fromId, toId),
         showGlobeHint: true,
       };
     }
@@ -588,7 +615,7 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
         typeof parsed.payload === 'string'
       ) {
         return {
-          text: ensureSimulationBreakdown(parsed.payload, parsed.message),
+          text: buildVisualSummary(parsed.payload, parsed.message),
           showGlobeHint: true,
         };
       }

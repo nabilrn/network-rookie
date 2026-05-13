@@ -3,6 +3,15 @@ import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 
 export type MissionStatus = 'inactive' | 'active' | 'success' | 'failed';
 
+export interface ScenarioNarrative {
+  mode: 'high-load' | 'packet-loss' | 'cable-cut';
+  story: string;
+  fromId?: string;
+  toId?: string;
+  flowFromId?: string;
+  flowToId?: string;
+}
+
 export interface Mission {
   id: string;
   title: string;
@@ -21,6 +30,7 @@ export function useAppState() {
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [decisionImpact, setDecisionImpact] = useState<DecisionVisualImpact | null>(null);
+  const [scenarioNarrative, setScenarioNarrative] = useState<ScenarioNarrative | null>(null);
 
   const startMission = (mission: Mission) => {
     setActiveMission({ ...mission, status: 'active' });
@@ -66,5 +76,7 @@ export function useAppState() {
     toggleCompareMode,
     decisionImpact,
     setDecisionImpact,
+    scenarioNarrative,
+    setScenarioNarrative,
   };
 }

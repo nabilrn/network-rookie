@@ -39,6 +39,15 @@ export interface ExplainResponse {
 export interface ScenarioResponse {
   type: 'scenario';
   mode: 'high-load' | 'packet-loss' | 'cable-cut';
+  connector?: {
+    fromId: string;
+    toId: string;
+    createIfMissing?: boolean;
+  };
+  fromId?: string;
+  toId?: string;
+  flowFromId?: string;
+  flowToId?: string;
   story: string;
 }
 
@@ -130,6 +139,63 @@ function stripMarkdownFences(input: string): string {
   return fenced ? fenced[1].trim() : trimmed;
 }
 
+function normalizeText(input: string): string {
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findTermIndex(haystack: string, term: string): number {
+  const normalizedTerm = normalizeText(term);
+  if (!normalizedTerm) return -1;
+  const pattern = escapeRegex(normalizedTerm).replace(/\s+/g, '\\s+');
+  const matcher = new RegExp(`(^|[^a-z0-9])${pattern}(?=$|[^a-z0-9])`);
+  const match = matcher.exec(haystack);
+  if (!match || match.index < 0) return -1;
+  const boundaryLength = match[1]?.length ?? 0;
+  return match.index + boundaryLength;
+}
+
+function inferScenarioConnectorFromStory(story: string): { fromId: string; toId: string } | null {
+  const normalizedStory = normalizeText(story);
+  if (!normalizedStory) return null;
+
+  const candidatePositions = new Map<string, number>();
+  const mark = (cityId: string, index: number) => {
+    if (index < 0) return;
+    const current = candidatePositions.get(cityId);
+    if (current === undefined || index < current) {
+      candidatePositions.set(cityId, index);
+    }
+  };
+
+  CITIES.forEach((city) => {
+    mark(city.id, findTermIndex(normalizedStory, city.name));
+    mark(city.id, findTermIndex(normalizedStory, city.id));
+  });
+
+  const noisyAliases = new Set(['us', 'uk', 'la', 'sg']);
+  Object.entries(CITY_ALIASES).forEach(([alias, cityId]) => {
+    const normalizedAlias = normalizeText(alias);
+    if (normalizedAlias.length < 3 || noisyAliases.has(normalizedAlias)) return;
+    mark(cityId, findTermIndex(normalizedStory, normalizedAlias));
+  });
+
+  const ranked = Array.from(candidatePositions.entries())
+    .sort((a, b) => a[1] - b[1])
+    .map(([cityId]) => cityId);
+
+  if (ranked.length < 2 || ranked[0] === ranked[1]) return null;
+  return { fromId: ranked[0], toId: ranked[1] };
+}
+
 function safeCityByIndex(index: number | null) {
   if (index === null) return null;
   return CITIES[index] ?? null;
@@ -171,7 +237,7 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
   const schema = `Allowed JSON response shapes only:
 1) {"type":"journey","fromId":"cityId","toId":"cityId","steps":[{"emoji":"...","title":"...","body":"..."},{"emoji":"...","title":"...","body":"..."},{"emoji":"...","title":"...","body":"..."},{"emoji":"...","title":"...","body":"..."}],"story":"two short sentences"}
 2) {"type":"explain","content":"max 80 words, plain English","analogy":"one sentence analogy","highlightCityId":"optional cityId"}
-3) {"type":"scenario","mode":"high-load|packet-loss|cable-cut","story":"plain English narration with 4 lines: What/Why/Impact/What-to-do"}
+3) {"type":"scenario","mode":"high-load|packet-loss|cable-cut","connector":{"fromId":"cityId","toId":"cityId","createIfMissing":true},"fromId":"cityId","toId":"cityId","flowFromId":"cityId","flowToId":"cityId","story":"plain English narration with exactly 2 lines: What/Why"}
 4) {"type":"fact","emoji":"...","content":"max 30 words"}
 5) {"type":"action","action":"SET_MODE|FOCUS_CITY","payload":"mode or cityId","message":"plain English narration"}
 6) {"type":"mission","id":"unique mission id","title":"mission name","goal":"mission objective in plain English","fromId":"source cityId","toId":"destination cityId","hint":"helpful hint for the user"}
@@ -187,10 +253,18 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
       'If user asks about data travel, use type "journey" with exactly 4 steps.',
       'If user asks a question, use type "explain" and keep content under 80 words.',
       'For scenario and SET_MODE action responses, explain both what visitors see and what causes that mode.',
-      'For scenario.story, use exactly 3 short lines with these labels: "What you see:", "Why it happens:", "User impact:".',
-      'In "Why it happens", mention at least 2 realistic causes.',
+      'For simulation requests, ALWAYS use type "scenario" and include connector {fromId,toId,createIfMissing:true} with two different valid city IDs. Also mirror them into fromId + toId + flowFromId + flowToId.',
+      'Choose a random city pair for every simulation response.',
+      'For scenario.story, use exactly 2 lines with these labels: "What you see on map:", "Why it happens:".',
+      'In "What you see on map", describe only visible route behavior on the globe (dots, rings, route status).',
+      'In "Why it happens" for high-load mode, give 2-3 vivid real-world examples such as: a popular game launch (e.g. millions downloading a new Fortnite season update), a global live stream (e.g. the FIFA World Cup final watched by 500M people simultaneously), or a new streaming season premiere. Be specific and relatable for beginners.',
+      'In "Why it happens" for other modes, mention at least 2 realistic causes.',
       'Use plain English only. If you use "packet", immediately explain it as "small pieces of data".',
       'If user commands to change simulation or focus on a city, use type "action".',
+      '--- Specific Topic Guidance ---',
+      '1. "How internet works": Explain it is a collection of billions of computers. Data travels at the speed of light through fiber optics. Data is broken into packets and passes through internet layers.',
+      '2. "Important components of internet": Provide a tidy, organized list (Servers, Routers, Fiber Cables, IXPs, Protocols).',
+      '3. "History about internet": Mention ARPANET, TCP/IP, and the World Wide Web.',
       `Current context: city=${cityContext}; arc=${arcContext}; mode=${modeLabel(ctx.simulationMode)}; step=${ctx.osiStep ?? 'none'}.`,
     ].join('\n');
   }
@@ -207,28 +281,50 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
     `Available city IDs for routing: ${cityIds}.`,
     `City alias mapping for fuzzy matching: ${aliases}.`,
     'For explain responses, keep content to 80 words or fewer and add one clear analogy sentence.',
-    'For scenario responses, story must be exactly 4 short lines with these labels: "What you see:", "Why it happens:", "User impact:", "What to do:".',
+    'For simulation requests (high-load, packet-loss, cable-cut), ALWAYS use type "scenario" and include connector {fromId,toId,createIfMissing:true} plus fromId + toId + flowFromId + flowToId using two different valid city IDs.',
+    'Choose a random city pair for each simulation response.',
+    'For scenario responses, story must be exactly 2 short lines with these labels: "What you see on map:", "Why it happens:".',
+    'In "What you see on map", describe only what is visible on the globe for the selected route and nodes.',
     'In "Why it happens", mention at least 2 realistic, specific causes for the selected mode.',
-    'In "What to do:", suggest one simple action (e.g., "wait", "try another route", "refresh the page").',
     '',
     '--- Mode-specific guidance ---',
     'When mode is high-load:',
-    '  - Causes: peak evening usage (6-10pm), viral streaming event, game/software release day, holidays, natural disaster news spike',
-    '  - User impact: videos buffer, websites load slowly, file downloads crawl, video calls stutter',
+    '  - In the "Why it happens" line, ALWAYS give 2-3 specific real-world examples of events that cause internet rush hour. Pick from:',
+    '    * A major online game launch or update (e.g. a new Fortnite season dropped, Minecraft mega-update, a GTA VI release day)',
+    '    * A massive live streaming event (e.g. the FIFA World Cup final watched by 500 million people, Super Bowl, Olympics opening ceremony)',
+    '    * A viral social media event (e.g. a celebrity announcement shared billions of times in hours)',
+    '    * A global software update pushed simultaneously (e.g. new iOS version, Windows major update, a popular app hotfix)',
+    '    * A new series or film dropping on a streaming platform (e.g. the final season of a global hit, a blockbuster movie premiere)',
+    '  - Make the examples specific and vivid. Do not say just "high demand". Name the type of event and why it caused a spike.',
+    '  - Visual cues: dense moving dots, route highlight, pulsing rings on both route nodes',
     '',
     'When mode is packet-loss:',
     '  - Causes: weak WiFi or cellular signal, electrical interference near cables, network congestion causing drops, damaged fiber link',
     '  - Always explain "packet" as "small piece of data"',
-    '  - User impact: video/audio cuts out, chat messages delayed, images fail to load, repeated retries',
+    '  - Visual cues: moving dots stop at retry point (↺), then restart on the same route',
     '',
     'When mode is cable-cut:',
     '  - Causes: ship anchor damage (most common), undersea earthquake, construction accident, hurricane/storm damage, maintenance error',
-    '  - User impact: entire region isolated, users cannot access services, messaging fails, no streaming possible',
+    '  - Visual cues: selected route marked with large X and traffic stops on that route',
     '',
-    'For SET_MODE action responses, message must include at least 2 specific causes and one clear user impact in plain English.',
+    'For SET_MODE action responses, message must include only "What you see on map" and "Why it happens" in plain English.',
     'Avoid unexplained jargon. Prefer simple words and short sentences.',
     'If a city is mentioned with an alias, map it to the city ID from the alias map.',
     'If user commands to change the simulation mode or look at a city, use type "action" to trigger UI change.',
+    '',
+    '--- Specific Topic Guidance ---',
+    'When asked "How internet works":',
+    '  - Explain the paradigm: the internet is a massive web of computers talking to each other.',
+    '  - Detail how data travels at the speed of light through undersea and underground fiber optic cables.',
+    '  - Explain that data is split into "packets" (small pieces) which travel through different layers of the internet to find their way.',
+    '  - For this specific question, you may exceed the usual word limit (up to 150 words) to ensure high detail.',
+    '',
+    'When asked "What are the important components of internet?":',
+    '  - Provide a tidy, organized overview of essential parts.',
+    '  - Include Physical: (Servers, Fiber Cables, Routers) and Logical: (IP addresses, Protocols).',
+    '',
+    'When asked "Tell me history about internet":',
+    '  - Mention ARPANET (the first network), the adoption of TCP/IP (the language of the web), and the creation of the World Wide Web.',
   ].join('\n');
 }
 
@@ -281,15 +377,119 @@ function parsePayload(rawText: string): GeminiPayload {
   }
 
   if (payload.type === 'scenario') {
+    const hasFrom = payload.fromId !== undefined;
+    const hasTo = payload.toId !== undefined;
+    const hasConnector = payload.connector !== undefined;
+    const hasFlowFrom = payload.flowFromId !== undefined;
+    const hasFlowTo = payload.flowToId !== undefined;
     if (
       (payload.mode !== 'high-load' &&
         payload.mode !== 'packet-loss' &&
         payload.mode !== 'cable-cut') ||
-      typeof payload.story !== 'string'
+      typeof payload.story !== 'string' ||
+      (hasFrom && typeof payload.fromId !== 'string') ||
+      (hasTo && typeof payload.toId !== 'string') ||
+      (hasFlowFrom && typeof payload.flowFromId !== 'string') ||
+      (hasFlowTo && typeof payload.flowToId !== 'string') ||
+      (hasConnector &&
+        (typeof payload.connector !== 'object' || payload.connector === null)) ||
+      hasFrom !== hasTo ||
+      hasFlowFrom !== hasFlowTo
     ) {
       throw new Error('Invalid scenario payload');
     }
-    return payload as unknown as ScenarioResponse;
+
+    let connector:
+      | {
+          fromId: string;
+          toId: string;
+          createIfMissing: boolean;
+        }
+      | undefined;
+
+    if (hasConnector) {
+      const connectorPayload = payload.connector as Record<string, unknown>;
+      if (
+        typeof connectorPayload.fromId !== 'string' ||
+        typeof connectorPayload.toId !== 'string' ||
+        (connectorPayload.createIfMissing !== undefined &&
+          typeof connectorPayload.createIfMissing !== 'boolean')
+      ) {
+        throw new Error('Invalid scenario connector payload');
+      }
+
+      const normalizedConnectorFrom = resolveCityId(connectorPayload.fromId);
+      const normalizedConnectorTo = resolveCityId(connectorPayload.toId);
+      if (
+        normalizedConnectorFrom &&
+        normalizedConnectorTo &&
+        normalizedConnectorFrom !== normalizedConnectorTo
+      ) {
+        connector = {
+          fromId: normalizedConnectorFrom,
+          toId: normalizedConnectorTo,
+          createIfMissing: connectorPayload.createIfMissing !== false,
+        };
+      }
+    }
+
+    if (hasFrom && hasTo) {
+      const normalizedFrom = resolveCityId(payload.fromId as string);
+      const normalizedTo = resolveCityId(payload.toId as string);
+      if (
+        !connector &&
+        normalizedFrom &&
+        normalizedTo &&
+        normalizedFrom !== normalizedTo
+      ) {
+        connector = {
+          fromId: normalizedFrom,
+          toId: normalizedTo,
+          createIfMissing: true,
+        };
+      }
+    }
+
+    if (!connector) {
+      const inferredFromStory = inferScenarioConnectorFromStory(payload.story as string);
+      if (inferredFromStory) {
+        connector = {
+          fromId: inferredFromStory.fromId,
+          toId: inferredFromStory.toId,
+          createIfMissing: true,
+        };
+      }
+    }
+
+    let flowFromId: string | null = null;
+    let flowToId: string | null = null;
+    if (hasFlowFrom && hasFlowTo) {
+      flowFromId = resolveCityId(payload.flowFromId as string) ?? null;
+      flowToId = resolveCityId(payload.flowToId as string) ?? null;
+    }
+    if (connector && (!flowFromId || !flowToId)) {
+      flowFromId = connector.fromId;
+      flowToId = connector.toId;
+    }
+
+    if (connector) {
+      return {
+        type: 'scenario',
+        mode: payload.mode as ScenarioResponse['mode'],
+        connector,
+        fromId: connector.fromId,
+        toId: connector.toId,
+        flowFromId: flowFromId ?? undefined,
+        flowToId: flowToId ?? undefined,
+        story: payload.story as string,
+      };
+    }
+
+    return {
+      type: 'scenario',
+      mode: payload.mode as ScenarioResponse['mode'],
+      story: payload.story as string,
+    };
   }
 
   if (payload.type === 'fact') {
@@ -467,7 +667,7 @@ export function useGeminiChat(ctx: GeminiChatContext) {
         setLastPayload(result.payload);
         setMessages([
           ...nextMessages,
-          { role: 'model', parts: [{ text: result.modelText }] },
+          { role: 'model', parts: [{ text: JSON.stringify(result.payload) }] },
         ]);
       } catch (caughtError) {
         setMessages(beforeSend);

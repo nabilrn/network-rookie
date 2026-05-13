@@ -247,6 +247,69 @@
   color: var(--globe-overlay-muted);
 }
 
+.globe-sim-route {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 20;
+  width: min(420px, calc(100% - 36px));
+  background: var(--globe-overlay-bg-strong);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: inset 0 0 0 1px var(--globe-overlay-border), 0 10px 20px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.globe-sim-route-title {
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--globe-overlay-muted);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.globe-sim-route-cards {
+  display: grid;
+  gap: 8px;
+}
+
+.globe-sim-route-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(8, 12, 20, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
+}
+
+.globe-sim-route-flag img {
+  display: block;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.globe-sim-route-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.globe-sim-route-name {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--globe-overlay-text);
+}
+
+.globe-sim-route-note {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--globe-overlay-muted);
+}
+
 .globe-legend {
   position: absolute;
   right: 14px;

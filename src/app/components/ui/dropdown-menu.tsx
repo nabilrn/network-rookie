@@ -96,6 +96,8 @@ function DropdownMenuCheckboxItem({
         className,
       )}
       checked={checked}
+      // Prevent the menu from closing when toggling checkboxes
+      onSelect={(e) => e.preventDefault()}
       {...props}
     >
       <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
