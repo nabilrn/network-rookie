@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Network Rookie</title>
     <script>
-      const path = window.location.pathname;
       const base = "/network-rookie/";
+      const path = window.location.pathname;
 
       if (path.startsWith(base)) {
-        const route = path.slice(base.length);
-        window.location.replace(`${base}#/${route}${window.location.search}${window.location.hash}`);
+        const route = `/${path.slice(base.length)}${window.location.search}${window.location.hash}`;
+        sessionStorage.setItem("network-rookie-route", route);
+        window.location.replace(base);
       } else {
-        window.location.replace("/");
+        window.location.replace(base);
       }
     </script>
   </head>

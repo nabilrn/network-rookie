@@ -1269,7 +1269,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             filter: drop-shadow(0 0 4px #0ea5e9);
           `;
           const img = document.createElement('img');
-          img.src = '/asset/starlink.svg';
+          img.src = `${import.meta.env.BASE_URL}asset/starlink.svg`;
           img.style.cssText = 'width: 100%; height: 100%; display: block; object-fit: contain; filter: invert(1);';
           icon.appendChild(img);
 
