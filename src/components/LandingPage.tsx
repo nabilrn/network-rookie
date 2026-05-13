@@ -7,7 +7,7 @@ export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ container: scrollRef });
-  
+
   // Smooth scroll progress
   const smoothProgress = useSpring(scrollYProgress, {
     stiffness: 60,
@@ -22,7 +22,7 @@ export const LandingPage: React.FC = () => {
 
   // Section 3 parallax
   const s3BgY = useTransform(smoothProgress, [0.4, 0.7], [-100, 100]);
-  
+
   // Section 4 parallax
   const s4BgY = useTransform(smoothProgress, [0.7, 1], [-50, 50]);
 
@@ -40,17 +40,17 @@ export const LandingPage: React.FC = () => {
 
       {/* Hero Section */}
       <section className="landing-section hero">
-        <motion.div 
-          className="section-bg" 
-          style={{ 
+        <motion.div
+          className="section-bg"
+          style={{
             opacity: heroOpacity,
             scale: heroScale,
             y: heroY,
-            backgroundImage: `url('https://images.unsplash.com/photo-1534996858221-380b92700493?auto=format&fit=crop&q=80&w=2000')` 
-          }} 
+            backgroundImage: `url('https://images.unsplash.com/photo-1534996858221-380b92700493?auto=format&fit=crop&q=80&w=2000')`
+          }}
         />
         <div className="section-content">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
@@ -66,7 +66,7 @@ export const LandingPage: React.FC = () => {
       {/* History Section */}
       <section className="landing-section history">
         <div className="section-content">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
@@ -76,10 +76,10 @@ export const LandingPage: React.FC = () => {
             <span className="sub-tag">HISTORY — 1969</span>
             <h2>It started as an experiment to survive a nuclear war.</h2>
             <p>
-              In 1969, a network called ARPANET connected just four university computers. The goal 
-              was resilience — a communication system that could survive a nuclear strike by rerouting 
-              data around destroyed nodes. Over the next few decades, that modest experiment became 
-              the infrastructure of human civilization. Today it spans every continent, every 
+              In 1969, a network called ARPANET connected just four university computers. The goal
+              was resilience — a communication system that could survive a nuclear strike by rerouting
+              data around destroyed nodes. Over the next few decades, that modest experiment became
+              the infrastructure of human civilization. Today it spans every continent, every
               ocean floor, even Antarctica.
             </p>
           </motion.div>
@@ -88,15 +88,15 @@ export const LandingPage: React.FC = () => {
 
       {/* What it is Section */}
       <section className="landing-section what-it-is">
-        <motion.div 
-          className="section-bg" 
-          style={{ 
+        <motion.div
+          className="section-bg"
+          style={{
             y: s3BgY,
-            backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=2000')` 
-          }} 
+            backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=2000')`
+          }}
         />
         <div className="section-content">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ margin: "-20%" }}
@@ -106,13 +106,13 @@ export const LandingPage: React.FC = () => {
             <span className="sub-tag">WHAT IT IS</span>
             <h2>Not a cloud. A wire — carrying light.</h2>
             <p>
-              The internet is a vast collection of supercomputers — servers, routers, switches — 
-              connected by physical cables that span ocean floors and mountain ranges. Most of these 
-              cables are fiber optic: strands of glass thinner than a human hair, carrying pulses of laser 
+              The internet is a vast collection of supercomputers — servers, routers, switches —
+              connected by physical cables that span ocean floors and mountain ranges. Most of these
+              cables are fiber optic: strands of glass thinner than a human hair, carrying pulses of laser
               light at 200,000 kilometers per second.
             </p>
             <p>
-              Your message, your photo, your video call — they all travel as light, bouncing through 
+              Your message, your photo, your video call — they all travel as light, bouncing through
               glass, from one machine to the next, across continents, in under 100 milliseconds.
             </p>
             <blockquote className="quote">
@@ -124,16 +124,16 @@ export const LandingPage: React.FC = () => {
 
       {/* Network Layers Section */}
       <section className="landing-section layers">
-        <motion.div 
-          className="section-bg dimmed" 
-          style={{ 
+        <motion.div
+          className="section-bg dimmed"
+          style={{
             y: s4BgY,
-            backgroundImage: `url('https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=2000')` 
-          }} 
+            backgroundImage: `url('https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=2000')`
+          }}
         />
         <div className="section-content">
           <div className="layers-grid">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
@@ -142,13 +142,13 @@ export const LandingPage: React.FC = () => {
               <span className="sub-tag">NETWORK LAYERS</span>
               <h2>Your message moves through invisible layers.</h2>
               <p>
-                When you send a message, it doesn't travel as one piece. It's broken into small packets, 
-                each addressed and routed independently, then reassembled at the destination — 
+                When you send a message, it doesn't travel as one piece. It's broken into small packets,
+                each addressed and routed independently, then reassembled at the destination —
                 all within milliseconds. Each step is governed by a different layer of protocol.
               </p>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
@@ -174,7 +174,7 @@ export const LandingPage: React.FC = () => {
 
       <footer className="landing-footer">
         <div className="footer-content">
-          <span>© 2025 Network Rookie</span>
+          <span>© 2026 Network Rookie</span>
           <a href="https://github.com/nabilrn" target="_blank" rel="noreferrer">github.com/nabilrn</a>
         </div>
       </footer>
