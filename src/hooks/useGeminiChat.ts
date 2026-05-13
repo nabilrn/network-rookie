@@ -113,14 +113,15 @@ type GeminiApiResponse = {
 
 const PRIMARY_GEMINI_MODEL =
   (import.meta.env.VITE_GEMINI_MODEL as string | undefined)?.trim() ||
-  'gemini-flash-lite-latest';
+  'gemini-2.5-flash';
 
 const FALLBACK_GEMINI_MODELS = [
-  'gemini-2.0-flash-lite-001',
-  'gemini-2.0-flash-lite',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
 ];
+
+const GEMINI_REQUEST_TIMEOUT_MS = 8000;
 
 function modelUrl(model: string): string {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -257,7 +258,7 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
       'Choose a random city pair for every simulation response.',
       'For scenario.story, use exactly 2 lines with these labels: "What you see on map:", "Why it happens:".',
       'In "What you see on map", describe only visible route behavior on the globe (dots, rings, route status).',
-      'In "Why it happens" for high-load mode, give 2-3 vivid real-world examples such as: a popular game launch (e.g. millions downloading a new Fortnite season update), a global live stream (e.g. the FIFA World Cup final watched by 500M people simultaneously), or a new streaming season premiere. Be specific and relatable for beginners.',
+      'In "Why it happens" for high-load mode, describe route-level congestion only: one path is saturated, office-hour cloud traffic, CDN cache misses, a peering bottleneck, maintenance reducing capacity, or a regional ISP overload. Do not mention worldwide game launches, global live streams, viral social surges, or OS updates unless the user explicitly asks for a global traffic spike.',
       'In "Why it happens" for other modes, mention at least 2 realistic causes.',
       'Use plain English only. If you use "packet", immediately explain it as "small pieces of data".',
       'If user commands to change simulation or focus on a city, use type "action".',
@@ -289,13 +290,9 @@ function buildSystemPrompt(ctx: GeminiChatContext, simplified: boolean): string 
     '',
     '--- Mode-specific guidance ---',
     'When mode is high-load:',
-    '  - In the "Why it happens" line, ALWAYS give 2-3 specific real-world examples of events that cause internet rush hour. Pick from:',
-    '    * A major online game launch or update (e.g. a new Fortnite season dropped, Minecraft mega-update, a GTA VI release day)',
-    '    * A massive live streaming event (e.g. the FIFA World Cup final watched by 500 million people, Super Bowl, Olympics opening ceremony)',
-    '    * A viral social media event (e.g. a celebrity announcement shared billions of times in hours)',
-    '    * A global software update pushed simultaneously (e.g. new iOS version, Windows major update, a popular app hotfix)',
-    '    * A new series or film dropping on a streaming platform (e.g. the final season of a global hit, a blockbuster movie premiere)',
-    '  - Make the examples specific and vivid. Do not say just "high demand". Name the type of event and why it caused a spike.',
+    '  - Treat normal high-load simulation as a route traffic jam, not a global traffic spike.',
+    '  - In the "Why it happens" line, use 2 route-level causes: one link is saturated, office-hour cloud traffic, CDN cache misses, a peering bottleneck, maintenance reducing capacity, regional ISP overload, or nearby cloud-region spillover.',
+    '  - Do not mention worldwide game launches, global live streams, viral social surges, streaming premieres, or OS updates for route traffic jam.',
     '  - Visual cues: dense moving dots, route highlight, pulsing rings on both route nodes',
     '',
     'When mode is packet-loss:',
@@ -563,6 +560,26 @@ function extractModelText(apiResponse: GeminiApiResponse): string {
   return text;
 }
 
+const FALLBACK_GEMINI_STATUSES = new Set([404, 429, 500, 502, 503, 504]);
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), GEMINI_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function shouldTryNextGeminiModel(status: number): boolean {
+  return FALLBACK_GEMINI_STATUSES.has(status);
+}
+
 async function callGemini(
   messages: ChatMessage[],
   ctx: GeminiChatContext,
@@ -583,18 +600,33 @@ async function callGemini(
     },
   });
 
-  const modelsToTry = [PRIMARY_GEMINI_MODEL, ...FALLBACK_GEMINI_MODELS];
+  const modelsToTry = Array.from(new Set([PRIMARY_GEMINI_MODEL, ...FALLBACK_GEMINI_MODELS]));
   let response: Response | null = null;
-  for (const model of modelsToTry) {
-    response = await fetch(`${modelUrl(model)}?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: requestBody,
-    });
+  let lastStatus: number | null = null;
 
-    if (response.ok || response.status !== 404) {
+  for (const model of modelsToTry) {
+    try {
+      response = await fetchWithTimeout(`${modelUrl(model)}?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: requestBody,
+      });
+      lastStatus = response.status;
+    } catch (caughtError) {
+      if (caughtError instanceof DOMException && caughtError.name === 'AbortError') {
+        lastStatus = 504;
+        continue;
+      }
+      throw caughtError;
+    }
+
+    if (response?.ok) {
+      break;
+    }
+
+    if (response && !shouldTryNextGeminiModel(response.status)) {
       break;
     }
   }
@@ -605,8 +637,14 @@ async function callGemini(
 
   if (!response.ok) {
     let retryMessage = 'Could not reach the AI guide right now. Please try again.';
-    if (response.status === 429) {
-      retryMessage = 'The AI guide is busy right now. Please wait a minute and try again.';
+    if (lastStatus === 429) {
+      retryMessage = 'The AI guide hit the free quota limit. Please wait a minute and try again.';
+    } else if (lastStatus === 503) {
+      retryMessage = 'The AI model is overloaded right now. I tried fallback models too; please retry in a bit.';
+    } else if (lastStatus === 504) {
+      retryMessage = 'The AI guide took too long to respond. Please retry in a moment.';
+    } else if (lastStatus && lastStatus >= 500) {
+      retryMessage = 'The AI provider is having a temporary server issue. Please retry in a bit.';
     }
     throw new Error(retryMessage);
   }

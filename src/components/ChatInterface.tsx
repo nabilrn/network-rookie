@@ -3,7 +3,6 @@ import type { KeyboardEvent } from 'react';
 import { useGeminiChat, type JourneyResponse, type GeminiPayload, type MissionResponse, type DecisionResponse, type ScenarioResponse } from '../hooks/useGeminiChat';
 import { CITIES, CONNECTIONS } from '../data/network';
 import { MissionCard } from './MissionCard';
-import { ModeComparePanel } from './ModeComparePanel';
 import type { Mission } from '../hooks/useAppState';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import './ChatInterface.css';
@@ -49,7 +48,7 @@ const SIMULATION_PROMPTS: Record<string, string> = {
   normal:
     'Set the network to normal mode. Explain with exactly 2 short lines: "What you see on map:" and "Why it happens:".',
   'high-load':
-    'Simulate rush hour / high load. Return type "scenario" JSON with mode, connector, fromId, toId, and story. Connector format: {"fromId":"cityId","toId":"cityId","createIfMissing":true}. Pick 2 random different cities for this simulation. Story must use exactly 2 lines with these labels: "What you see on map:", "Why it happens:". In "Why it happens", give 2–3 specific real-world examples (e.g. game launch, global live stream, viral social surge).',
+    'Simulate route traffic jam / high load on one city-to-city path. Return type "scenario" JSON with mode, connector, fromId, toId, and story. Connector format: {"fromId":"cityId","toId":"cityId","createIfMissing":true}. Pick 2 random different cities for this simulation. Story must use exactly 2 lines with these labels: "What you see on map:", "Why it happens:". In "Why it happens", use route-specific causes only: one link is saturated, office-hour cloud traffic, CDN cache miss, peering bottleneck, maintenance reducing capacity, or a regional ISP overload. Do not mention worldwide game launches, global live streams, viral social surges, or OS updates.',
   'packet-loss':
     'Simulate packet loss. Return type "scenario" JSON with mode, connector, fromId, toId, and story. Connector format: {"fromId":"cityId","toId":"cityId","createIfMissing":true}. Pick 2 random different cities for this simulation. Story must be exactly 2 short lines: "What you see on map:", "Why it happens:". Explain packet as small pieces of data. In "Why it happens", mention 2 realistic causes.',
   'cable-cut':
@@ -95,6 +94,7 @@ const toScenarioConnector = (payload: ScenarioResponse): ScenarioConnector | nul
 export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
   ({ selectedCity, selectedArc, simulationMode, osiStep, activeMission, compareMode, onJourney, onScenario, onAction, onMissionStart, onMissionComplete, onMissionReset, onToggleCompare, onDecision, onDecisionApplied, onScenarioPayload }, ref) => {
     const [inputValue, setInputValue] = useState('');
+    const [localMessages, setLocalMessages] = useState<DisplayMessage[]>([]);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const handledPayloadRef = useRef<GeminiPayload | null>(null);
     const pendingScenarioRef = useRef<PendingScenario | null>(null);
@@ -115,7 +115,9 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           if (/Respond with JSON type "action"/i.test(text)) {
             text = text.split('\n')[0] ?? text;
           }
-          if (text.includes('Simulate rush hour')) text = 'Simulate rush hour';
+          if (text.includes('Simulate rush hour') || text.includes('Simulate route traffic jam')) {
+            text = 'Simulate route traffic jam';
+          }
           else if (text.includes('Simulate packet loss')) text = 'Simulate packet loss';
           else if (text.includes('Simulate a cable break')) text = 'Simulate a cable break';
         }
@@ -127,8 +129,8 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           showGlobeHint: parsedResponse?.showGlobeHint ?? false,
         };
       });
-      return [INITIAL_MESSAGE, ...parsed];
-    }, [messages]);
+      return [INITIAL_MESSAGE, ...parsed, ...localMessages];
+    }, [messages, localMessages]);
 
     const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
       const container = messagesContainerRef.current;
@@ -222,6 +224,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       reset: () => {
         clear();
         setInputValue('');
+        setLocalMessages([]);
         handledPayloadRef.current = null;
       },
       applySimulationMode: (mode: string) => {
@@ -255,6 +258,7 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       if (sessionCapped || loading) return;
       const basePrompt = SIMULATION_PROMPTS[mode] || '';
       if (!basePrompt) return;
+      setLocalMessages([]);
 
       const connector = pickRandomScenarioConnector();
       if (connector) {
@@ -271,6 +275,21 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
       await send(prompt);
     };
 
+    const handleGlobalRushHour = () => {
+      if (sessionCapped || loading) return;
+      pendingScenarioRef.current = null;
+      setInputValue('');
+      onScenario('high-load');
+      setLocalMessages([
+        {
+          id: `local-global-rush-${Date.now()}`,
+          sender: 'ai',
+          text: 'Global traffic spike is running: worldwide demand surge from events like a game release, live sports stream, OS update, or streaming premiere.',
+          showGlobeHint: true,
+        },
+      ]);
+    };
+
     const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -284,53 +303,11 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
     const startNewSession = () => {
       clear();
       setInputValue('');
+      setLocalMessages([]);
     };
 
-    const activeMode = simulationMode || 'normal';
-    
-    const canShowCompareControls = activeMode !== 'normal';
-    const closeCompareDialog = () => {
-      if (compareMode) {
-        onToggleCompare?.();
-      }
-    };
-
-    useEffect(() => {
-      if (!compareMode) return;
-      const onKeyDown = (event: globalThis.KeyboardEvent) => {
-        if (event.key === 'Escape') {
-          closeCompareDialog();
-        }
-      };
-      window.addEventListener('keydown', onKeyDown);
-      return () => window.removeEventListener('keydown', onKeyDown);
-    }, [compareMode]);
   return (
     <div className="chat-interface">
-      {/* Compare Panel (center modal) */}
-      {compareMode && canShowCompareControls && (
-        <div className="compare-modal-overlay" onClick={closeCompareDialog}>
-          <div className="compare-modal-dialog" onClick={(event) => event.stopPropagation()}>
-            <div className="compare-modal-header">
-              <div className="compare-modal-title">Detailed comparison</div>
-              <button
-                className="compare-modal-close"
-                onClick={closeCompareDialog}
-                title="Close details"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="compare-modal-body">
-              <ModeComparePanel
-                mode={(activeMode as any) || 'normal'}
-                isVisible={true}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Mission Card */}
       {activeMission && lastPayload?.type === 'mission' && (
         <div className="mission-container">
@@ -348,19 +325,6 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
             onComplete={() => onMissionComplete?.()}
             onReset={() => onMissionReset?.()}
           />
-        </div>
-      )}
-
-      {canShowCompareControls && (
-        <div className="compare-control-bar">
-          <button
-            className={`compare-toggle ${compareMode ? 'compare-active' : ''}`}
-            disabled={loading}
-            onClick={() => onToggleCompare?.()}
-            title="Show before/after numbers"
-          >
-            {compareMode ? 'Hide' : 'Show'} detailed comparison
-          </button>
         </div>
       )}
 
@@ -420,8 +384,11 @@ export const ChatInterface = forwardRef<ChatInterfaceRef, ChatInterfaceProps>(
           <span className="city-chip-cc">DE</span> Frankfurt
         </button>
         <div className="chat-suggestions-label chat-suggestions-label--secondary">Simulate Events</div>
+        <button className="suggestion-chip action-chip" disabled={inputDisabled} onClick={handleGlobalRushHour}>
+          Global Traffic Spike
+        </button>
         <button className="suggestion-chip action-chip" disabled={inputDisabled} onClick={() => void handleSimChip('high-load')}>
-          Rush Hour
+          Route Traffic Jam
         </button>
         <button className="suggestion-chip action-chip" disabled={inputDisabled} onClick={() => void handleSimChip('packet-loss')}>
           Packet Loss
@@ -529,14 +496,13 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
     return 'A physical cable failure on this route stopped traffic flow.';
   };
 
-  const RUSH_HOUR_REAL_EXAMPLES = [
-    'a massive online game update dropped (like a new Fortnite season or a Minecraft mega-patch), sending millions of players downloading gigabytes at once',
-    'a record-breaking live stream event — imagine 50 million people watching a world championship final at the same moment',
-    'a viral social media moment: a celebrity post or shocking news clip shared by hundreds of millions within hours',
-    'a new streaming season dropped on a popular platform (think a global hit series release), flooding servers with simultaneous viewers',
-    'a major software update (like a new iOS or Android version) pushed to hundreds of millions of devices at exactly the same time',
-    'a global sporting event like the FIFA World Cup final or the Olympics opening ceremony streamed live to billions',
-    'a popular online game\'s new season launch \u2014 players worldwide rushing to download patches and log in at the same time',
+  const ROUTE_TRAFFIC_JAM_EXAMPLES = [
+    'office-hour cloud traffic fills this corridor between two business hubs',
+    'a CDN cache miss forces more users on this path to fetch content from a farther data center',
+    'a peering bottleneck between providers makes this route queue packets',
+    'maintenance reduces available capacity, so traffic squeezes through fewer links',
+    'a regional ISP overload pushes extra traffic onto this backbone path',
+    'a nearby cloud region is under heavy load, so this route carries spillover traffic',
   ];
 
   const buildVisualSummary = (
@@ -553,8 +519,8 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
     if (mode === 'high-load') {
       const what = `What you see: Dense packet dots move along ${routeLabel}, and both end nodes pulse continuously.`;
 
-      // Pick 2 random real-world examples to show variety
-      const shuffled = [...RUSH_HOUR_REAL_EXAMPLES].sort(() => Math.random() - 0.5);
+      // Pick 2 route-specific examples to show variety without making it feel global.
+      const shuffled = [...ROUTE_TRAFFIC_JAM_EXAMPLES].sort(() => Math.random() - 0.5);
       const example1 = shuffled[0];
       const example2 = shuffled[1];
 
@@ -563,7 +529,7 @@ function parseModelResponse(text: string): { text: string; showGlobeHint: boolea
           ? 'This corridor is already one of the busiest routes on the map'
           : 'Traffic demand on this route suddenly spiked';
 
-      const why = `Why it happens: ${baseReason}. Real-world triggers include events like ${example1}, or ${example2}. When millions of people do the same thing online at once, internet highways get jammed — just like road traffic during rush hour.`;
+      const why = `Why it happens: ${baseReason}. Route-level causes include ${example1}, or ${example2}. The path behaves like one crowded highway lane: packets still move, but they queue and slow down.`;
       return `${what}\n${why}`;
     }
 

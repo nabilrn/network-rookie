@@ -1,6 +1,19 @@
 import type { DecisionVisualImpact } from './simulationDecisionEngine';
 
-type LegendTone = 'neutral' | 'warn' | 'danger' | 'success' | 'info';
+type LegendTone =
+  | 'neutral'
+  | 'warn'
+  | 'danger'
+  | 'success'
+  | 'info'
+  | 'arc-amber'
+  | 'arc-teal'
+  | 'arc-blue'
+  | 'packet'
+  | 'hub'
+  | 'fiber'
+  | 'infra'
+  | 'sat';
 
 export interface GlobeLegendItem {
   id: string;
@@ -54,24 +67,26 @@ export function getGlobeLegendItems(
   const items: GlobeLegendItem[] = [];
 
   if (mode === 'normal') {
-    items.push({ id: 'route-normal', symbol: '━━', text: 'Colored arcs represent network backbone routes.', tone: 'neutral' });
-    items.push({ id: 'subsea-cable', symbol: '━', text: 'Thick yellow lines show intercontinental subsea fiber.', tone: 'warn' });
-    items.push({ id: 'data-packets', symbol: '• •', text: 'Moving dots simulate real-time data packets traversing the network.', tone: 'info' });
-    items.push({ id: 'hub-ring', symbol: '◉', text: 'Pulsing blue rings mark major internet hubs.', tone: 'info' });
-    items.push({ id: 'company-logo', symbol: '🏢', text: 'Logos highlight Big Tech data centers and cloud regions.', tone: 'neutral' });
-    items.push({ id: 'satellite-leo', symbol: 'SAT', text: 'SpaceX Starlink satellites in Low Earth Orbit (LEO).', tone: 'info' });
+    items.push({ id: 'route-amber', symbol: '━━', text: 'Amber arcs group major transoceanic backbone corridors.', tone: 'arc-amber' });
+    items.push({ id: 'route-teal', symbol: '━━', text: 'Teal arcs group Asia-Europe and inter-region corridors.', tone: 'arc-teal' });
+    items.push({ id: 'route-blue', symbol: '━━', text: 'Blue arcs group general regional backbone paths.', tone: 'arc-blue' });
+    items.push({ id: 'subsea-cable', symbol: '━', text: 'Gold paths indicate long intercontinental fiber links.', tone: 'fiber' });
+    items.push({ id: 'data-packets', symbol: '• •', text: 'Cyan moving dots simulate small pieces of data in transit.', tone: 'packet' });
+    items.push({ id: 'hub-ring', symbol: '◉', text: 'Pulsing cyan rings mark major internet hubs.', tone: 'hub' });
+    items.push({ id: 'company-logo', symbol: '■', text: 'White logo tiles mark nearby cloud and data-center operators.', tone: 'infra' });
+    items.push({ id: 'satellite-leo', symbol: 'SAT', text: 'Starlink markers represent low-earth-orbit satellite gateways.', tone: 'sat' });
   } else if (mode === 'high-load') {
-    items.push({ id: 'route-high-load', symbol: '━━', text: 'Thicker routes mean traffic is getting busier.', tone: 'warn' });
-    items.push({ id: 'high-load-dots', symbol: '• •', text: 'More moving dots mean more traffic entering a route.', tone: 'warn' });
+    items.push({ id: 'route-high-load', symbol: '━━', text: 'Amber sampled routes show busy traffic corridors.', tone: 'warn' });
+    items.push({ id: 'high-load-dots', symbol: '• •', text: 'Extra amber/cyan dots show more data entering selected routes.', tone: 'packet' });
   } else if (mode === 'packet-loss') {
-    items.push({ id: 'route-packet-loss', symbol: '↺', text: 'Retry marker means a small piece of data had to be sent again.', tone: 'danger' });
+    items.push({ id: 'route-packet-loss', symbol: '↺', text: 'Red retry marker means a small piece of data had to be sent again.', tone: 'danger' });
   } else if (mode === 'cable-cut') {
-    items.push({ id: 'route-cable-cut', symbol: '✕', text: 'X marks a route that is currently disrupted.', tone: 'danger' });
+    items.push({ id: 'route-cable-cut', symbol: '✕ ✕', text: 'Two red X marks block data approaching the broken cable segment.', tone: 'danger' });
   }
 
   // Common item for focus (only in simulation modes or when hovering/selecting)
   if (mode !== 'normal') {
-     items.push({ id: 'focus-ring', symbol: '◉', text: 'Pulsing ring shows the city or hub in focus.', tone: 'info' });
+     items.push({ id: 'focus-ring', symbol: '◉', text: 'Pulsing cyan ring shows the city or hub in focus.', tone: 'hub' });
   }
 
   if (activeDecision) {

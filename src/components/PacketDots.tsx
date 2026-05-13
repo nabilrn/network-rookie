@@ -19,6 +19,7 @@ interface Packet {
 
 const MAX_PACKET_ARCS = 42;
 const MAX_PACKET_ARCS_HIGH_LOAD = 58;
+const MAX_PACKET_ARCS_GLOBAL_SIM = 24;
 const ARC_DOT_ALTITUDE = 0.28;
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -46,8 +47,21 @@ export function PacketDots({ globeRef }: PacketDotsProps) {
     const totalArcs = CONNS.length;
     if (totalArcs <= 0) return [];
 
-    if (STATE.simulationMode !== 'normal' && STATE.selectedArc !== null) {
+    if (STATE.selectedArc !== null) {
       return STATE.selectedArc >= 0 && STATE.selectedArc < totalArcs ? [STATE.selectedArc] : [];
+    }
+
+    if (STATE.simulationMode !== 'normal') {
+      const preferred = [0, 1, 2, 4, 5, 8, 10, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76]
+        .filter((index) => index >= 0 && index < totalArcs);
+      if (preferred.length >= MAX_PACKET_ARCS_GLOBAL_SIM) {
+        return preferred.slice(0, MAX_PACKET_ARCS_GLOBAL_SIM);
+      }
+      const selected = new Set(preferred);
+      for (let index = 0; selected.size < MAX_PACKET_ARCS_GLOBAL_SIM && index < totalArcs; index += 1) {
+        selected.add(index);
+      }
+      return Array.from(selected);
     }
 
     const cap = STATE.simulationMode === 'high-load' ? MAX_PACKET_ARCS_HIGH_LOAD : MAX_PACKET_ARCS;
@@ -78,7 +92,7 @@ export function PacketDots({ globeRef }: PacketDotsProps) {
         else if (STATE.simulationMode === 'packet-loss') numDots = 4;
         else if (STATE.simulationMode === 'cable-cut') numDots = 12;
       } else if (STATE.simulationMode === 'high-load') {
-        numDots = 2;
+        numDots = 5;
       }
 
       for (let i = 0; i < numDots; i += 1) {
@@ -90,7 +104,7 @@ export function PacketDots({ globeRef }: PacketDotsProps) {
             
         const cableCutStop =
           focusedSimulation && STATE.simulationMode === 'cable-cut'
-            ? clamp((isFromCityB ? 0.8 : 0.2) + (Math.random() - 0.5) * 0.03, 0.1, 0.9)
+            ? clamp((isFromCityB ? 0.56 : 0.44) + (Math.random() - 0.5) * 0.018, 0.38, 0.62)
             : undefined;
 
         let initialProgress = clusteredProgress;
@@ -273,12 +287,12 @@ export function PacketDots({ globeRef }: PacketDotsProps) {
         const dotSize = focusedSimulation
           ? 3.4
           : STATE.simulationMode === 'high-load'
-            ? 2.8
+            ? 2.9
             : 2.4;
         const dotColor = focusedSimulation
           ? '#38bdf8'
           : STATE.simulationMode === 'high-load'
-            ? '#fbbf24'
+            ? Math.sin(pulseClock * 0.08) > 0 ? '#fbbf24' : '#38bdf8'
             : STATE.simulationMode === 'packet-loss'
               ? '#f87171'
               : '#38bdf8';

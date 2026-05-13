@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useMemo } from 'react';
 import Globe from 'globe.gl';
 import * as topojson from 'topojson-client';
-import { CITIES, CONNS, CONNECTIONS, ARC_COLORS, COMPANY_HUBS } from '../data/network';
+import { CITIES, CONNS, CONNECTIONS, ARC_COLORS, COMPANY_HUBS, ensureDirectConnection } from '../data/network';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { getDecisionMarker, getGlobeLegendItems } from '../utils/globeLegend';
 import { PacketDots } from './PacketDots';
@@ -14,7 +14,7 @@ import {
 } from '../app/components/ui/dropdown-menu';
 import { Switch } from '../app/components/ui/switch';
 import { Button } from '../app/components/ui/button';
-import { Layers } from 'lucide-react';
+import { Info, Layers } from 'lucide-react';
 import './GlobeSection.css';
 
 const STARLINK_SATS = Array.from({ length: 40 }).map((_, i) => ({
@@ -23,6 +23,12 @@ const STARLINK_SATS = Array.from({ length: 40 }).map((_, i) => ({
   lat: (Math.random() - 0.5) * 160,
   lng: (Math.random() - 0.5) * 360,
 }));
+
+const INSPECTOR_IMAGES = {
+  fiber: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&q=80&w=1200',
+  dataCenter: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&q=80&w=1200',
+  satellite: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&q=80&w=1200',
+};
 interface GlobeSectionProps {
   selectedCity: number | null;
   selectedArc: number | null;
@@ -36,6 +42,24 @@ interface GlobeSectionProps {
   onModeChange: (mode: string) => void;
   onSimulationSelect?: (mode: string) => void;
 }
+
+type InspectorData = {
+  title: string;
+  eyebrow: string;
+  imageUrl: string;
+  logoUrl?: string;
+  body: string;
+  facts: Array<{ label: string; value: string }>;
+};
+
+type PreviewFocus = {
+  type: 'fiber' | 'company' | 'satellite';
+  lat: number;
+  lng: number;
+  label: string;
+  accent: string;
+  arcIndex?: number;
+};
 
 export interface GlobeSectionRef {
   globeRef: React.RefObject<any>;
@@ -71,6 +95,7 @@ const CITY_DIALOG_GAP = 18;
 const CITY_DIALOG_EDGE_PADDING = 16;
 const INITIAL_VISIBLE_CITY_COUNT = 30;
 const INITIAL_PRIORITY_CITY_IDS = ['sgp', 'tok', 'lon', 'nyc', 'lax', 'syd', 'mum', 'dxb', 'fra', 'sao'];
+const GLOBAL_SIMULATION_ARC_LIMIT = 24;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -135,6 +160,50 @@ const getArcFocusAltitude = (distanceKm: number): number => {
   if (distanceKm >= 3500) return 1.0;
   return 0.82;
 };
+
+const getSampledGlobalArcIndices = (): number[] => {
+  const priorityIds = new Set([
+    'lax-tok-faster',
+    'tok-sgp-jupiter',
+    'lax-sgp-sea-us',
+    'nyc-lon-aec1',
+    'lon-fra-terrestrial',
+    'sgp-mum-smew4',
+    'mum-dxb-smew5',
+    'dxb-lon-flag',
+    'nyc-sao-seabras1',
+    'syd-sgp-indigo',
+    'syd-lax-sc',
+    'dxb-fra-smw5',
+    'lon-sgp-smew3',
+    'nyc-fra-tat14',
+    'syd-tok-bass',
+    'lax-sao-pan-am',
+  ]);
+  const selected = new Set<number>();
+
+  CONNECTIONS.forEach((connection, index) => {
+    if (priorityIds.has(connection.id)) selected.add(index);
+  });
+
+  for (let index = 0; selected.size < GLOBAL_SIMULATION_ARC_LIMIT && index < CONNECTIONS.length; index += 1) {
+    const connection = CONNECTIONS[index];
+    if (connection.distanceKm < 2500) continue;
+    selected.add(index);
+  }
+
+  return Array.from(selected).slice(0, GLOBAL_SIMULATION_ARC_LIMIT);
+};
+
+const getDefaultCableCutArcIndex = (): number => {
+  const preferredIds = ['nyc-lon-aec1', 'lax-tok-faster', 'sgp-mum-smew4', 'syd-sgp-indigo'];
+  const preferredIndex = preferredIds
+    .map((id) => CONNECTIONS.findIndex((connection) => connection.id === id))
+    .find((index) => index >= 0);
+  return preferredIndex ?? 0;
+};
+
+const pickRandomIndex = (length: number): number => Math.floor(Math.random() * length);
 
 const getCableCutReasonText = (
   story: string | null | undefined,
@@ -209,6 +278,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     return uniqueIds;
   });
   const [hintVisible, setHintVisible] = useState(true);
+  const [routeSourceCityId, setRouteSourceCityId] = useState<string | null>(null);
+  const [inspectorData, setInspectorData] = useState<InspectorData | null>(null);
+  const [previewFocus, setPreviewFocus] = useState<PreviewFocus | null>(null);
   const [cityDialogPosition, setCityDialogPosition] = useState<CityDialogPosition>({
     left: 40,
     top: 40,
@@ -225,12 +297,13 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     satellites: true,
   });
   const [layerMenuOpen, setLayerMenuOpen] = useState(false);
+  const [legendMenuOpen, setLegendMenuOpen] = useState(false);
 
   useEffect(() => {
     if (globeRef.current) {
       render();
     }
-  }, [layers]);
+  }, [layers, routeSourceCityId, previewFocus]);
 
   const buildVisibleCityPoints = () =>
     CITIES
@@ -244,8 +317,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     const visibleCityPoints = buildVisibleCityPoints();
     
     let filteredCities = visibleCityPoints;
-    let filteredHubs = layers.hubs ? COMPANY_HUBS : [];
-    let filteredSats = layers.satellites ? STARLINK_SATS : [];
+    const sampledGlobalSimulation = isSimActive && selectedArcIndex === null;
+    let filteredHubs = layers.hubs && !sampledGlobalSimulation ? COMPANY_HUBS : [];
+    let filteredSats = layers.satellites && !sampledGlobalSimulation ? STARLINK_SATS : [];
 
     // If simulation is active and an arc is focused, hide everything else for visual clarity
     if (isSimActive && selectedArcIndex !== null) {
@@ -299,6 +373,228 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     return null;
   };
 
+  const openRouteInspector = (arcIndex: number) => {
+    const connection = CONNECTIONS[arcIndex];
+    const conn = CONNS[arcIndex];
+    if (!connection || !conn || !globeRef.current) return;
+
+    const routeCities = STATE.scenarioRoute && STATE.selectedArc === arcIndex
+      ? getRouteCities()
+      : null;
+    const fromCity = routeCities?.fromCity ?? CITIES[conn[0]];
+    const toCity = routeCities?.toCity ?? CITIES[conn[1]];
+    const midpoint = interpolateGreatCircle(fromCity.lat, fromCity.lng, toCity.lat, toCity.lng, 0.5);
+
+    globeRef.current.controls?.() && (globeRef.current.controls().autoRotate = false);
+    globeRef.current.pointOfView({ lat: midpoint.lat, lng: midpoint.lng, altitude: 1.65 }, 900);
+    setInspectorData({
+      eyebrow: connection.type,
+      title: `${fromCity.name} → ${toCity.name}`,
+      imageUrl: INSPECTOR_IMAGES.fiber,
+      body: 'A fiber route carries data as pulses of light through glass strands. Long routes often cross oceans as protected submarine cables, then connect into land fiber and data centers near major cities.',
+      facts: [
+        { label: 'Cable', value: connection.cable },
+        { label: 'Latency', value: `${connection.latency} ms` },
+        { label: 'Distance', value: `${connection.distanceKm.toLocaleString()} km` },
+        { label: 'Capacity', value: connection.bandwidth },
+      ],
+    });
+  };
+
+  const openCompanyInspector = (hub: any) => {
+    if (!globeRef.current) return;
+    globeRef.current.controls?.() && (globeRef.current.controls().autoRotate = false);
+    globeRef.current.pointOfView({ lat: hub.lat, lng: hub.lng, altitude: 0.92 }, 800);
+    setInspectorData({
+      eyebrow: 'Cloud and data-center infrastructure',
+      title: hub.name,
+      imageUrl: INSPECTOR_IMAGES.dataCenter,
+      logoUrl: hub.logoPath,
+      body: 'Company hubs represent cloud regions, edge locations, carrier hotels, and data-center clusters. They keep apps close to users and exchange traffic directly with nearby networks.',
+      facts: [
+        { label: 'Focus', value: hub.note ?? 'Network infrastructure hub' },
+        { label: 'Role', value: 'Stores, processes, or accelerates internet traffic' },
+        { label: 'Why it matters', value: 'Shorter distance usually means lower delay and faster loading' },
+      ],
+    });
+  };
+
+  const closeInspector = () => {
+    setInspectorData(null);
+    setPreviewFocus(null);
+    const controls = globeRef.current?.controls?.();
+    if (controls) {
+      controls.autoRotate = true;
+    }
+  };
+
+  const openSatelliteInspector = (satellite: any) => {
+    if (!globeRef.current) return;
+    globeRef.current.controls?.() && (globeRef.current.controls().autoRotate = false);
+    globeRef.current.pointOfView({ lat: satellite.lat, lng: satellite.lng, altitude: 1.25 }, 800);
+    setInspectorData({
+      eyebrow: 'Low-earth-orbit satellite link',
+      title: 'Starlink satellite relay',
+      imageUrl: INSPECTOR_IMAGES.satellite,
+      body: 'LEO satellite internet sends data between a user dish, satellites above Earth, and ground gateways connected to the fiber internet. It helps remote areas connect where cables are limited.',
+      facts: [
+        { label: 'Orbit type', value: 'Low Earth Orbit' },
+        { label: 'Best use', value: 'Remote homes, ships, aircraft, and backup links' },
+        { label: 'Tradeoff', value: 'Usually higher latency than nearby fiber, but wider coverage' },
+      ],
+    });
+  };
+
+  const openFiberComponentInfo = (colorKey?: 'amber' | 'teal' | 'steel') => {
+    const candidateArcIndices = CONNS
+      .map((conn, index) => ({ conn, index }))
+      .filter(({ conn, index }) => {
+        const connection = CONNECTIONS[index];
+        if (!connection) return false;
+        if (colorKey && conn[2] !== colorKey) return false;
+        return colorKey ? true : connection.type === 'Subsea cable' || connection.distanceKm > 3500;
+      })
+      .map(({ index }) => index);
+    const routeIndex = candidateArcIndices[pickRandomIndex(candidateArcIndices.length)] ?? pickRandomIndex(CONNECTIONS.length);
+    const connection = CONNECTIONS[routeIndex];
+    const conn = CONNS[routeIndex];
+    let previewLabel = 'Fiber route';
+    if (globeRef.current && connection && conn) {
+      const fromCity = CITIES[conn[0]];
+      const toCity = CITIES[conn[1]];
+      const midpoint = interpolateGreatCircle(fromCity.lat, fromCity.lng, toCity.lat, toCity.lng, 0.5);
+      previewLabel = colorKey === 'teal' ? 'Teal fiber route' : colorKey === 'steel' ? 'Blue fiber route' : colorKey === 'amber' ? 'Amber fiber route' : 'Fiber route';
+      const controls = globeRef.current.controls?.();
+      if (controls) controls.autoRotate = false;
+      globeRef.current.pointOfView(
+        { lat: midpoint.lat, lng: midpoint.lng, altitude: getArcFocusAltitude(connection.distanceKm) },
+        900,
+      );
+      setPreviewFocus({
+        type: 'fiber',
+        lat: midpoint.lat,
+        lng: midpoint.lng,
+        label: previewLabel,
+        accent: RESOLVED_ARC_COLORS[conn[2]] ?? '#67e8f9',
+        arcIndex: routeIndex,
+      });
+    }
+
+    setInspectorData({
+      eyebrow: 'Physical network component',
+      title: previewLabel,
+      imageUrl: INSPECTOR_IMAGES.fiber,
+      body: 'Fiber optic cable is the physical path that carries internet traffic as pulses of light. On the globe, fiber routes represent high-capacity backbone links between major cities, regions, and continents.',
+      facts: [
+        { label: 'Signal', value: 'Laser light pulses inside thin glass strands' },
+        { label: 'Role', value: 'Moves large traffic volumes across backbone routes' },
+        { label: 'Why it matters', value: 'Most long-distance internet traffic still depends on fiber' },
+      ],
+    });
+  };
+
+  const openCompanyComponentInfo = () => {
+    const hub = COMPANY_HUBS[pickRandomIndex(COMPANY_HUBS.length)];
+    if (globeRef.current && hub) {
+      const nearestCity = CITIES
+        .map((city) => ({
+          id: city.id,
+          distanceKm: haversineKm(city.lat, city.lng, hub.lat, hub.lng),
+        }))
+        .sort((a, b) => a.distanceKm - b.distanceKm)[0];
+      if (nearestCity) {
+        setVisibleCityIds((prev) => Array.from(new Set([...prev, nearestCity.id])));
+      }
+
+      const controls = globeRef.current.controls?.();
+      if (controls) controls.autoRotate = false;
+      globeRef.current.pointOfView({ lat: hub.lat, lng: hub.lng, altitude: 0.74 }, 900);
+      setPreviewFocus({
+        type: 'company',
+        lat: hub.lat,
+        lng: hub.lng,
+        label: hub.name,
+        accent: hub.markerColor ?? '#f8fafc',
+      });
+    }
+
+    setInspectorData({
+      eyebrow: 'Cloud and data-center infrastructure',
+      title: hub ? `${hub.name} example` : 'Cloud and data-center operators',
+      imageUrl: INSPECTOR_IMAGES.dataCenter,
+      logoUrl: hub?.logoPath,
+      body: 'Company logo tiles mark operators that run cloud regions, edge networks, carrier-neutral data centers, CDNs, satellite gateways, or backbone infrastructure near major internet hubs.',
+      facts: [
+        { label: 'Example focus', value: hub?.note ?? 'Cloud or data-center infrastructure hub' },
+        { label: 'Role', value: 'Host apps, cache content, exchange traffic, or connect users into the internet' },
+        { label: 'Why it matters', value: 'Closer infrastructure usually reduces delay and improves reliability' },
+      ],
+    });
+  };
+
+  const openSatelliteComponentInfo = () => {
+    const satellite = STARLINK_SATS[pickRandomIndex(STARLINK_SATS.length)];
+    if (globeRef.current && satellite) {
+      const controls = globeRef.current.controls?.();
+      if (controls) controls.autoRotate = false;
+      globeRef.current.pointOfView({ lat: satellite.lat, lng: satellite.lng, altitude: 1.12 }, 900);
+      setPreviewFocus({
+        type: 'satellite',
+        lat: satellite.lat,
+        lng: satellite.lng,
+        label: 'LEO satellite',
+        accent: '#93c5fd',
+      });
+    }
+
+    setInspectorData({
+      eyebrow: 'Wireless network component',
+      title: 'Low-earth-orbit satellite link',
+      imageUrl: INSPECTOR_IMAGES.satellite,
+      body: 'LEO satellite markers represent orbital internet links. Traffic can travel from a user terminal to satellites, then down to ground gateways that connect back into the fiber internet.',
+      facts: [
+        { label: 'Best use', value: 'Remote areas, ships, aircraft, emergency backup, and rural coverage' },
+        { label: 'Tradeoff', value: 'Wider reach than fiber, but usually more variable latency' },
+        { label: 'Ground link', value: 'Satellites still need gateways connected to terrestrial networks' },
+      ],
+    });
+  };
+
+  const openLegendComponentInfo = (itemId: string) => {
+    if (itemId === 'route-amber') {
+      openFiberComponentInfo('amber');
+      return;
+    }
+    if (itemId === 'route-teal') {
+      openFiberComponentInfo('teal');
+      return;
+    }
+    if (itemId === 'route-blue') {
+      openFiberComponentInfo('steel');
+      return;
+    }
+    if (itemId === 'subsea-cable') {
+      openFiberComponentInfo();
+      return;
+    }
+    if (itemId === 'company-logo') {
+      openCompanyComponentInfo();
+      return;
+    }
+    if (itemId === 'satellite-leo') {
+      openSatelliteComponentInfo();
+    }
+  };
+
+  const legendInfoItemIds = new Set([
+    'route-amber',
+    'route-teal',
+    'route-blue',
+    'subsea-cable',
+    'company-logo',
+    'satellite-leo',
+  ]);
+
   // Sync props to STATE and trigger globe zoom
   useEffect(() => {
     if (!globeRef.current) return;
@@ -315,6 +611,16 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       scenarioRoute?.fromId && scenarioRoute?.toId
         ? { fromId: scenarioRoute.fromId, toId: scenarioRoute.toId }
         : null;
+    if (newMode === 'cable-cut' && selectedArc === null && !STATE.scenarioRoute) {
+      const fallbackArc = getDefaultCableCutArcIndex();
+      STATE.selectedArc = fallbackArc;
+      onArcSelect(fallbackArc);
+      setRouteSourceCityId(null);
+      return;
+    }
+    if (selectedArc !== null || selectedCity === null) {
+      setRouteSourceCityId(null);
+    }
 
     const globe = globeRef.current;
     const controls = globe.controls ? globe.controls() : null;
@@ -338,22 +644,20 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     // Zoom to specific arc (useful for cable breaks)
     else if (selectedArc !== null && CONNS[selectedArc]) {
       const conn = CONNS[selectedArc];
-      const fromCity = CITIES[conn[0]];
-      const toCity = CITIES[conn[1]];
-      const midLat = (fromCity.lat + toCity.lat) / 2;
+      const routeCities = getRouteCities();
+      const fromCity = routeCities?.fromCity ?? CITIES[conn[0]];
+      const toCity = routeCities?.toCity ?? CITIES[conn[1]];
+      const midpoint = interpolateGreatCircle(fromCity.lat, fromCity.lng, toCity.lat, toCity.lng, 0.5);
       const routeDistanceKm =
         CONNECTIONS[selectedArc]?.distanceKm ??
         haversineKm(fromCity.lat, fromCity.lng, toCity.lat, toCity.lng);
-      const routeAltitude = getArcFocusAltitude(routeDistanceKm);
-      let midLng = (fromCity.lng + toCity.lng) / 2;
-      
-      // Handle anti-meridian crossing for pacific routes
-      if (Math.abs(fromCity.lng - toCity.lng) > 180) {
-        midLng = midLng > 0 ? midLng - 180 : midLng + 180;
-      }
+      const routeAltitude =
+        newMode === 'cable-cut'
+          ? Math.max(1.75, getArcFocusAltitude(routeDistanceKm) + 0.22)
+          : getArcFocusAltitude(routeDistanceKm);
       
       if (controls) controls.autoRotate = false;
-      globe.pointOfView({ lat: midLat, lng: midLng, altitude: routeAltitude }, 1200);
+      globe.pointOfView({ lat: midpoint.lat, lng: midpoint.lng, altitude: routeAltitude }, 1200);
       setHintVisible(false);
     }
     // Zoom OUT when simulation mode changes (dramatic overview effect)
@@ -411,6 +715,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
     STATE.selectedCity = null;
     STATE.selectedArc = arcIdx >= 0 ? arcIdx : null;
+    setRouteSourceCityId(null);
     onCitySelect(null);
     onArcSelect(STATE.selectedArc);
 
@@ -433,6 +738,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
   function triggerReset() {
     STATE.selectedCity = null;
     STATE.selectedArc = null;
+    setRouteSourceCityId(null);
     onCitySelect(null);
     onArcSelect(null);
 
@@ -452,6 +758,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
     const globe = globeRef.current;
     const focusedSimulation = STATE.simulationMode !== 'normal' && STATE.selectedArc !== null;
+    const sampledGlobalSimulation = STATE.simulationMode !== 'normal' && STATE.selectedArc === null;
     if (focusedSimulation) {
       console.log('[Globe] focused sim', {
         mode: STATE.simulationMode,
@@ -459,7 +766,11 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         scenarioRoute: STATE.scenarioRoute,
       });
     }
-    const arcIndices = focusedSimulation ? [STATE.selectedArc as number] : CONNS.map((_, index) => index);
+    const arcIndices = focusedSimulation
+      ? [STATE.selectedArc as number]
+      : sampledGlobalSimulation
+        ? getSampledGlobalArcIndices()
+        : CONNS.map((_, index) => index);
     const refreshedArcsData = arcIndices
       .map((arcIndex) => {
         const conn = CONNS[arcIndex];
@@ -496,6 +807,16 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     globe.arcsData(layers.arcs ? refreshedArcsData : []);
     
     const dynamicHtmlElements = buildVisibleOverlayData();
+    if (previewFocus) {
+      dynamicHtmlElements.push({
+        type: 'component-preview',
+        lat: previewFocus.lat,
+        lng: previewFocus.lng,
+        label: previewFocus.label,
+        previewType: previewFocus.type,
+        accent: previewFocus.accent,
+      });
+    }
 
     if (focusedSimulation && refreshedArcsData[0]) {
       const activeArc = refreshedArcsData[0];
@@ -631,6 +952,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       if (STATE.selectedArc === arcIndex) {
         return focusedSimulation ? baseStroke + 0.35 : isPacketLossMode ? baseStroke + 0.44 : baseStroke + 0.22;
       }
+      if (previewFocus?.type === 'fiber' && previewFocus.arcIndex === arcIndex) {
+        return baseStroke + 0.16;
+      }
       if (activeDecisionImpact && affectedArcIndices.has(arcIndex)) return baseStroke + 0.28;
       return baseStroke;
     });
@@ -689,6 +1013,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
       if (focusedSimulation && STATE.selectedArc === arcIndex) {
         baseColor = '#f7c955';
+      }
+      if (previewFocus?.type === 'fiber' && previewFocus.arcIndex === arcIndex) {
+        return previewFocus.accent;
       }
 
       // Override base color based on simulation mode
@@ -752,6 +1079,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     globe
       .ringsData(ringsData)
       .ringColor(() => {
+        if (routeSourceCityId) return 'rgba(251, 191, 36, 0.76)';
         if (decisionAccentColor) return hexToRgba(decisionAccentColor, 0.6);
         if (simulatedConnection) {
           if (STATE.simulationMode === 'high-load') return 'rgba(251, 191, 36, 0.72)';
@@ -760,7 +1088,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         }
         return ringColor;
       })
-      .ringMaxRadius(activeDecisionImpact ? 3.4 : simulatedConnection ? 3.1 : 2)
+      .ringMaxRadius(activeDecisionImpact ? 3.4 : simulatedConnection || routeSourceCityId ? 3.1 : 2)
       .ringPropagationSpeed(activeDecisionImpact ? 3 : simulatedConnection ? 2.8 : 2)
       .ringRepeatPeriod(activeDecisionImpact ? 900 : simulatedConnection ? 760 : 1500);
 
@@ -874,34 +1202,37 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         if (!cutArc) return;
         const cableCutReasonText = getCableCutReasonText(scenarioStory, conn);
         const interpolateLatLng = (t: number) => interpolateGreatCircle(cutArc.startLat, cutArc.startLng, cutArc.endLat, cutArc.endLng, t);
-        const startMark = interpolateLatLng(0.2);
-        const endMark = interpolateLatLng(0.8);
-        const midPoint = interpolateLatLng(0.5);
+        const inboundBlock = interpolateLatLng(0.44);
+        const outboundBlock = interpolateLatLng(0.56);
+        const tooltipPoint = interpolateLatLng(0.5);
         
         dynamicHtmlElements.push(
           {
             type: 'cable-cut-x',
-            lat: startMark.lat,
-            lng: startMark.lng,
+            lat: inboundBlock.lat,
+            lng: inboundBlock.lng,
+            direction: 'inbound',
           },
           {
             type: 'cable-cut-x',
-            lat: endMark.lat,
-            lng: endMark.lng,
+            lat: outboundBlock.lat,
+            lng: outboundBlock.lng,
+            direction: 'outbound',
           },
           {
             type: 'cable-cut-tooltip',
-            lat: midPoint.lat,
-            lng: midPoint.lng,
-            text: cableCutReasonText,
+            lat: tooltipPoint.lat,
+            lng: tooltipPoint.lng,
+            text: 'Cable break',
+            detail: cableCutReasonText,
           }
         );
         
         // Add backup route indicator when alternatives exist
         if (conn && conn.backupRouteIds.length > 0) {
           labelsData.push({
-            lat: midPoint.lat + 1.08,
-            lng: midPoint.lng,
+            lat: outboundBlock.lat + 1.08,
+            lng: outboundBlock.lng,
             text: 'Reroute',
             color: '#8ba389',
             size: 0.85,
@@ -943,7 +1274,10 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .labelSize('size')
       .labelColor('color')
       .labelDotRadius((d: any) => {
-        if (d.isCityDot) return STATE.selectedCity === d.cityIndex ? 1.2 : 0.8;
+        if (d.isCityDot) {
+          const city = CITIES[d.cityIndex];
+          return STATE.selectedCity === d.cityIndex || routeSourceCityId === city?.id ? 1.2 : 0.8;
+        }
         if (d.isCritical) return 0;
         return activeDecisionImpact ? 0.65 : 0.3;
       })
@@ -953,7 +1287,9 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         return activeDecisionImpact ? 0.08 : 0.03;
       })
       .htmlAltitude((d: any) => {
-        if (d.type === 'cable-cut-x' || d.type === 'cable-cut-tooltip') return 0;
+        if (d.type === 'cable-cut-x') return 0.012;
+        if (d.type === 'cable-cut-tooltip') return 0.018;
+        if (d.type === 'component-preview') return d.previewType === 'fiber' ? 0.28 : d.previewType === 'satellite' ? 0.18 : 0.045;
         return d.type === 'company-hub' ? 0.03 : (d.type === 'satellite' ? 0.18 : 0.015);
       })
       .htmlElementsData(dynamicHtmlElements)
@@ -961,12 +1297,31 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         if (d.isCityDot) {
           const clickedIndex = d.cityIndex;
           if (clickedIndex !== -1) {
+            const clickedCity = CITIES[clickedIndex];
             if (hintVisible) setHintVisible(false);
-            STATE.selectedCity = STATE.selectedCity === clickedIndex ? null : clickedIndex;
+
+            if (routeSourceCityId && routeSourceCityId !== clickedCity.id) {
+              const routeArcIndex = ensureDirectConnection(routeSourceCityId, clickedCity.id);
+              if (routeArcIndex !== null) {
+                STATE.selectedCity = null;
+                STATE.selectedArc = routeArcIndex;
+                setRouteSourceCityId(null);
+                setVisibleCityIds((prev) => Array.from(new Set([...prev, routeSourceCityId, clickedCity.id])));
+                onCitySelect(null);
+                onArcSelect(routeArcIndex);
+                console.log('🖱️ Route selected:', routeSourceCityId, '→', clickedCity.id, '| Arc:', routeArcIndex);
+                render();
+                return;
+              }
+            }
+
+            const nextSourceId = routeSourceCityId === clickedCity.id ? null : clickedCity.id;
+            setRouteSourceCityId(nextSourceId);
+            STATE.selectedCity = nextSourceId ? clickedIndex : null;
             STATE.selectedArc = null;
             onArcSelect(null);
             onCitySelect(STATE.selectedCity);
-            console.log('🖱️ City clicked:', CITIES[clickedIndex].name, '| Index:', clickedIndex);
+            console.log('🖱️ City source selected:', clickedCity.name, '| Index:', clickedIndex);
             render();
           }
         }
@@ -1102,14 +1457,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         if (clickedIndex !== -1) {
           STATE.selectedArc = STATE.selectedArc === clickedIndex ? null : clickedIndex;
           STATE.selectedCity = null; // Deselect city when arc is selected
+          setRouteSourceCityId(null);
           onArcSelect(STATE.selectedArc);
           onCitySelect(null);
           console.log('🖱️ Arc clicked:', CONNS[clickedIndex], '| Index:', clickedIndex);
 
           // TODO: SERVICE - Fetch real arc/route metadata
-          // API endpoint: GET /api/routes/${clickedIndex}/metadata
-          // Response: { latency: number, protocol: string, bandwidth: string, status: string }
-
           render();
         }
       })
@@ -1119,11 +1472,12 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       .ringLng('lng')
       .ringColor((d: any) => {
         const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
+        if (routeSourceCityId === d.id) return 'rgba(251, 191, 36, 0.9)';
         return STATE.selectedCity === cityIndex ? 'rgba(56, 189, 248, 0.9)' : 'rgba(56, 189, 248, 0.45)';
       })
       .ringMaxRadius((d: any) => {
         const cityIndex = typeof d.cityIndex === 'number' ? d.cityIndex : CITIES.findIndex((city) => city.id === d.id);
-        return STATE.selectedCity === cityIndex ? 2.6 : 1.6;
+        return STATE.selectedCity === cityIndex || routeSourceCityId === d.id ? 2.6 : 1.6;
       })
       .ringPropagationSpeed(1.2)
       .ringRepeatPeriod(1800)
@@ -1194,62 +1548,123 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         } else if (d.type === 'cable-cut-x') {
           const wrap = document.createElement('div');
           wrap.style.cssText = `
-            color: #ef4444;
-            font-size: 24px;
-            font-weight: 800;
+            color: #ff3434;
+            font-size: 34px;
+            font-weight: 900;
             font-family: var(--sans);
-            text-shadow: 0 0 10px rgba(239, 68, 68, 0.8), 0 0 4px #000;
+            line-height: 1;
+            text-shadow: 0 0 8px rgba(255, 52, 52, 0.95), 0 2px 3px rgba(0, 0, 0, 0.95);
             transform: translate(-50%, -50%);
             user-select: none;
             pointer-events: none;
           `;
-          wrap.textContent = 'X';
+          wrap.textContent = '×';
           return wrap;
         } else if (d.type === 'cable-cut-tooltip') {
           const wrap = document.createElement('div');
           wrap.style.cssText = `
-            background: #fff7ed;
-            border: 2px solid #f97316;
-            border-radius: 12px;
-            padding: 8px 14px;
-            color: #c2410c;
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(248, 113, 113, 0.58);
+            border-radius: 999px;
+            padding: 4px 8px;
+            color: #fecaca;
             font-family: var(--sans);
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
             text-align: center;
-            max-width: 160px;
-            transform: translate(-50%, calc(-100% - 8px));
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transform: translate(-50%, calc(-100% - 22px));
+            box-shadow: 0 4px 10px rgba(0,0,0,0.28);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             user-select: none;
             pointer-events: none;
             position: relative;
-            white-space: normal;
+            white-space: nowrap;
           `;
           const pointer = document.createElement('div');
           pointer.style.cssText = `
             content: '';
             position: absolute;
-            bottom: -8px;
+            bottom: -5px;
             left: 50%;
             transform: translateX(-50%);
-            border-width: 8px 8px 0;
+            border-width: 5px 5px 0;
             border-style: solid;
-            border-color: #f97316 transparent transparent transparent;
+            border-color: rgba(248, 113, 113, 0.58) transparent transparent transparent;
           `;
           const pointerInner = document.createElement('div');
           pointerInner.style.cssText = `
             content: '';
             position: absolute;
-            bottom: -5px;
+            bottom: -3px;
             left: 50%;
             transform: translateX(-50%);
-            border-width: 6px 6px 0;
+            border-width: 4px 4px 0;
             border-style: solid;
-            border-color: #fff7ed transparent transparent transparent;
+            border-color: rgba(15, 23, 42, 0.78) transparent transparent transparent;
           `;
           wrap.textContent = d.text;
           wrap.appendChild(pointer);
           wrap.appendChild(pointerInner);
+          return wrap;
+        } else if (d.type === 'component-preview') {
+          const wrap = document.createElement('div');
+          const accent = d.accent ?? '#67e8f9';
+          const ringSize = d.previewType === 'fiber' ? 42 : 54;
+          wrap.style.cssText = `
+            position: relative;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            user-select: none;
+            font-family: var(--sans);
+          `;
+
+          const ring = document.createElement('div');
+          ring.style.cssText = `
+            width: ${ringSize}px;
+            height: ${ringSize}px;
+            border-radius: 999px;
+            border: 2px solid ${accent};
+            box-shadow: 0 0 18px ${accent}, inset 0 0 14px rgba(255,255,255,0.16);
+            animation: componentPreviewPulse 1.25s ease-in-out infinite;
+          `;
+
+          const arrow = document.createElement('div');
+          arrow.style.cssText = `
+            position: absolute;
+            left: 50%;
+            top: -24px;
+            width: 2px;
+            height: 28px;
+            transform: translateX(-50%);
+            background: linear-gradient(180deg, transparent, ${accent});
+            box-shadow: 0 0 10px ${accent};
+          `;
+
+          const label = document.createElement('div');
+          label.style.cssText = `
+            position: absolute;
+            left: 50%;
+            top: -48px;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(2, 6, 23, 0.78);
+            color: ${accent};
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            box-shadow: inset 0 0 0 1px ${accent}, 0 6px 14px rgba(0,0,0,0.28);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+          `;
+          label.textContent = d.label ?? 'Preview';
+
+          wrap.appendChild(ring);
+          wrap.appendChild(arrow);
+          wrap.appendChild(label);
           return wrap;
         } else if (d.type === 'satellite') {
           const wrap = document.createElement('div');
@@ -1546,15 +1961,20 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     : null;
 
   const simulationRouteCities =
-    simulationMode !== 'normal' && selectedArc !== null
+    selectedArc !== null
       ? getRouteCities()
       : null;
+  const routeSourceCity = routeSourceCityId
+    ? CITIES.find((city) => city.id === routeSourceCityId) ?? null
+    : null;
 
   const legendItems = getGlobeLegendItems(simulationMode, decisionImpact);
 
   const closeCityDialog = () => {
     STATE.selectedCity = null;
     STATE.selectedArc = null;
+    setRouteSourceCityId(null);
+    setPreviewFocus(null);
     onCitySelect(null);
     onArcSelect(null);
 
@@ -1568,6 +1988,8 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
 
   const handleResetAll = () => {
     setHintVisible(true);
+    setRouteSourceCityId(null);
+    setPreviewFocus(null);
     onResetAll?.();
   };
 
@@ -1585,10 +2007,67 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           Tap any city to begin
         </div>
       )}
+      {routeSourceCity && selectedArc === null && (
+        <div className="globe-route-prompt">
+          <span>
+            Source selected: <strong>{routeSourceCity.name}</strong>. Choose a destination city to activate traffic.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setRouteSourceCityId(null);
+              STATE.selectedCity = null;
+              onCitySelect(null);
+              render();
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       {decisionBadge && (
         <div className={`globe-decision-badge globe-decision-badge--${decisionBadge.tone}`}>
           <div className="globe-sim-badge-title">{decisionBadge.title}</div>
           <div className="globe-sim-badge-detail">{decisionBadge.detail}</div>
+        </div>
+      )}
+      {inspectorData && (
+        <div className="globe-inspector" role="dialog" aria-label={inspectorData.title}>
+          <div
+            className="globe-inspector-image"
+            style={{ backgroundImage: `url('${inspectorData.imageUrl}')` }}
+          >
+            {inspectorData.logoUrl && (
+              <div className="globe-inspector-logo-wrap">
+                <img
+                  className="globe-inspector-logo"
+                  src={inspectorData.logoUrl}
+                  alt={inspectorData.title}
+                />
+              </div>
+            )}
+          </div>
+          <div className="globe-inspector-content">
+            <div className="globe-inspector-eyebrow">{inspectorData.eyebrow}</div>
+            <div className="globe-inspector-title">{inspectorData.title}</div>
+            <p className="globe-inspector-body">{inspectorData.body}</p>
+            <div className="globe-inspector-facts">
+              {inspectorData.facts.map((fact) => (
+                <div key={`${fact.label}-${fact.value}`} className="globe-inspector-fact">
+                  <span>{fact.label}</span>
+                  <strong>{fact.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button
+            className="globe-inspector-close"
+            type="button"
+            onClick={closeInspector}
+            aria-label="Close inspector"
+          >
+            ×
+          </button>
         </div>
       )}
       {simulationRouteCities && (
@@ -1617,8 +2096,64 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
         </div>
       )}
 
-      {/* Layer Toggle Menu */}
-      <div className="absolute top-[18px] right-[18px] z-50">
+      {/* Legend + Layer Menus */}
+      <div className="globe-top-tools">
+        <DropdownMenu open={legendMenuOpen} onOpenChange={setLegendMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="bg-slate-900/60 backdrop-blur-md border-slate-700/50 text-slate-200 hover:bg-slate-800 hover:text-white"
+              title="Show globe legend"
+            >
+              <Info className="size-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={10}
+            className="z-50 w-[360px] !p-0 border-none bg-transparent shadow-none"
+          >
+            <div className="globe-legend !relative !right-auto !bottom-auto !w-full !pointer-events-auto">
+              <div className="globe-legend-title">Globe legend</div>
+              <div
+                className="globe-legend-tip"
+                title="Open info cards from the globe or use this legend when small items are hard to click."
+              >
+                <span className="globe-legend-tip-icon">i</span>
+                <span>Click fiber routes, company logos, or SAT markers to open component info cards.</span>
+              </div>
+              <div className="globe-legend-list">
+                {legendItems.map((item) => (
+                  <div key={item.id} className="globe-legend-row">
+                    <div className="globe-legend-item">
+                      <span className={`globe-legend-symbol globe-legend-symbol--${item.tone}`}>
+                        {item.symbol}
+                      </span>
+                      <span className="globe-legend-text">{item.text}</span>
+                    </div>
+                    {legendInfoItemIds.has(item.id) && (
+                      <button
+                        type="button"
+                        className="globe-legend-info-btn"
+                        title={`Open info about ${item.text}`}
+                        aria-label={`Open info about ${item.text}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openLegendComponentInfo(item.id);
+                        }}
+                      >
+                        <Info className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <DropdownMenu open={layerMenuOpen} onOpenChange={setLayerMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button 
@@ -1675,20 +2210,6 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-
-      <div className="globe-legend">
-        <div className="globe-legend-title">Globe legend</div>
-        <div className="globe-legend-list">
-          {legendItems.map((item) => (
-            <div key={item.id} className="globe-legend-item">
-              <span className={`globe-legend-symbol globe-legend-symbol--${item.tone}`}>
-                {item.symbol}
-              </span>
-              <span className="globe-legend-text">{item.text}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* City Info Dialog */}
