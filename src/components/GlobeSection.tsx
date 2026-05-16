@@ -14,7 +14,7 @@ import {
 } from '../app/components/ui/dropdown-menu';
 import { Switch } from '../app/components/ui/switch';
 import { Button } from '../app/components/ui/button';
-import { Info, Layers } from 'lucide-react';
+import { Info, Layers, X } from 'lucide-react';
 import './GlobeSection.css';
 
 const STARLINK_SATS = Array.from({ length: 40 }).map((_, i) => ({
@@ -2220,6 +2220,13 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           style={{ left: `${cityDialogPosition.left}px`, top: `${cityDialogPosition.top}px` }}
           key={selectedCity}
         >
+          <button
+            className="city-dialog-close"
+            onClick={closeCityDialog}
+            aria-label="Close city details"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
           <div className="city-dialog-flag-row">
             <div className="city-dialog-flag">
               <img
@@ -2280,9 +2287,6 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             </div>
           )}
           <div className="city-dialog-detail">{selectedCityData.fact}</div>
-          <button className="city-dialog-close" onClick={closeCityDialog}>
-            Close
-          </button>
         </div>
       )}
     </div>
