@@ -2223,7 +2223,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           <button
             className="city-dialog-close"
             onClick={closeCityDialog}
-            aria-label="Close city detail"
+            aria-label="Close city details"
           >
             <X size={18} aria-hidden="true" />
           </button>
