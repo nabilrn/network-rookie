@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useMemo }
 import Globe from 'globe.gl';
 import * as topojson from 'topojson-client';
 import { CITIES, CONNS, CONNECTIONS, ARC_COLORS, COMPANY_HUBS, ensureDirectConnection } from '../data/network';
+import type { CompanyHub } from '../data/network';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { getDecisionMarker, getGlobeLegendItems } from '../utils/globeLegend';
 import { PacketDots } from './PacketDots';
@@ -50,6 +51,8 @@ type InspectorData = {
   logoUrl?: string;
   body: string;
   facts: Array<{ label: string; value: string }>;
+  officialUrl?: string;
+  mapQuery?: string;
 };
 
 type PreviewFocus = {
@@ -60,6 +63,31 @@ type PreviewFocus = {
   accent: string;
   arcIndex?: number;
 };
+
+const buildCompanyInspectorData = (hub: CompanyHub): InspectorData => ({
+  eyebrow: 'Cloud and data-center infrastructure',
+  title: hub.name,
+  imageUrl: INSPECTOR_IMAGES.dataCenter,
+  logoUrl: hub.logoPath,
+  body: hub.description,
+  officialUrl: hub.officialUrl,
+  mapQuery: hub.mapQuery,
+  facts: [
+    { label: 'Metro / site', value: hub.metro },
+    { label: 'Focus', value: hub.focus },
+    { label: 'Infrastructure', value: hub.infrastructure },
+    { label: 'Traffic role', value: hub.trafficRole },
+    { label: 'User example', value: hub.userImpact },
+    { label: 'Key services', value: hub.keyServices.join(', ') },
+    { label: 'Reliability impact', value: hub.reliabilityImpact },
+  ],
+});
+
+const googleMapsEmbedUrl = (query: string): string =>
+  `https://maps.google.com/maps?q=${encodeURIComponent(query)}&t=k&z=12&ie=UTF8&iwloc=&output=embed`;
+
+const googleMapsSearchUrl = (query: string): string =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 
 export interface GlobeSectionRef {
   globeRef: React.RefObject<any>;
@@ -401,22 +429,11 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
     });
   };
 
-  const openCompanyInspector = (hub: any) => {
+  const openCompanyInspector = (hub: CompanyHub) => {
     if (!globeRef.current) return;
     globeRef.current.controls?.() && (globeRef.current.controls().autoRotate = false);
     globeRef.current.pointOfView({ lat: hub.lat, lng: hub.lng, altitude: 0.92 }, 800);
-    setInspectorData({
-      eyebrow: 'Cloud and data-center infrastructure',
-      title: hub.name,
-      imageUrl: INSPECTOR_IMAGES.dataCenter,
-      logoUrl: hub.logoPath,
-      body: 'Company hubs represent cloud regions, edge locations, carrier hotels, and data-center clusters. They keep apps close to users and exchange traffic directly with nearby networks.',
-      facts: [
-        { label: 'Focus', value: hub.note ?? 'Network infrastructure hub' },
-        { label: 'Role', value: 'Stores, processes, or accelerates internet traffic' },
-        { label: 'Why it matters', value: 'Shorter distance usually means lower delay and faster loading' },
-      ],
-    });
+    setInspectorData(buildCompanyInspectorData(hub));
   };
 
   const closeInspector = () => {
@@ -518,18 +535,21 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       });
     }
 
-    setInspectorData({
-      eyebrow: 'Cloud and data-center infrastructure',
-      title: hub ? `${hub.name} example` : 'Cloud and data-center operators',
-      imageUrl: INSPECTOR_IMAGES.dataCenter,
-      logoUrl: hub?.logoPath,
-      body: 'Company logo tiles mark operators that run cloud regions, edge networks, carrier-neutral data centers, CDNs, satellite gateways, or backbone infrastructure near major internet hubs.',
-      facts: [
-        { label: 'Example focus', value: hub?.note ?? 'Cloud or data-center infrastructure hub' },
-        { label: 'Role', value: 'Host apps, cache content, exchange traffic, or connect users into the internet' },
-        { label: 'Why it matters', value: 'Closer infrastructure usually reduces delay and improves reliability' },
-      ],
-    });
+    setInspectorData(
+      hub
+        ? buildCompanyInspectorData(hub)
+        : {
+            eyebrow: 'Cloud and data-center infrastructure',
+            title: 'Cloud and data-center operators',
+            imageUrl: INSPECTOR_IMAGES.dataCenter,
+            body: 'Company logo tiles mark operators that run cloud regions, edge networks, carrier-neutral data centers, CDNs, satellite gateways, or backbone infrastructure near major internet hubs.',
+            facts: [
+              { label: 'Typical site', value: 'Cloud region, carrier hotel, CDN POP, satellite gateway, or backbone meet-me room' },
+              { label: 'Traffic role', value: 'Host apps, cache content, exchange routes, or connect users into the global internet' },
+              { label: 'Reliability impact', value: 'Closer, denser infrastructure reduces delay and gives traffic more alternate paths' },
+            ],
+          },
+    );
   };
 
   const openSatelliteComponentInfo = () => {
@@ -2051,6 +2071,44 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             <div className="globe-inspector-eyebrow">{inspectorData.eyebrow}</div>
             <div className="globe-inspector-title">{inspectorData.title}</div>
             <p className="globe-inspector-body">{inspectorData.body}</p>
+            {(inspectorData.officialUrl || inspectorData.mapQuery) && (
+              <div className="globe-inspector-actions">
+                {inspectorData.officialUrl && (
+                  <a
+                    className="globe-inspector-link"
+                    href={inspectorData.officialUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Official company page
+                  </a>
+                )}
+                {inspectorData.mapQuery && (
+                  <a
+                    className="globe-inspector-link"
+                    href={googleMapsSearchUrl(inspectorData.mapQuery)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open in Google Maps
+                  </a>
+                )}
+              </div>
+            )}
+            {inspectorData.mapQuery && (
+              <div className="globe-inspector-map" aria-label={`${inspectorData.title} Google Maps preview`}>
+                <div className="globe-inspector-map-label">
+                  <span>Google Maps preview</span>
+                  <strong>{inspectorData.mapQuery}</strong>
+                </div>
+                <iframe
+                  title={`${inspectorData.title} map preview`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={googleMapsEmbedUrl(inspectorData.mapQuery)}
+                />
+              </div>
+            )}
             <div className="globe-inspector-facts">
               {inspectorData.facts.map((fact) => (
                 <div key={`${fact.label}-${fact.value}`} className="globe-inspector-fact">
@@ -2271,6 +2329,14 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
                     </div>
                     <div className="city-dialog-company-focus">{hub.focus}</div>
                     <div className="city-dialog-company-note">{hub.visitorFact}</div>
+                    <a
+                      className="city-dialog-company-link"
+                      href={hub.officialUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Official company page
+                    </a>
                     <div className="city-dialog-company-map">
                       <iframe
                         width="100%"
@@ -2278,7 +2344,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
                         style={{ border: 0, borderRadius: '8px', marginTop: '12px', background: '#0f172a' }}
                         loading="lazy"
                         referrerPolicy="no-referrer-when-downgrade"
-                        src={`https://maps.google.com/maps?q=${encodeURIComponent(hub.name + ' office ' + selectedCityData.name)}&t=k&z=12&ie=UTF8&iwloc=&output=embed`}
+                        src={googleMapsEmbedUrl(hub.mapQuery)}
                       ></iframe>
                     </div>
                   </div>
