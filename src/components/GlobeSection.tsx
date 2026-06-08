@@ -15,7 +15,8 @@ import {
 } from '../app/components/ui/dropdown-menu';
 import { Switch } from '../app/components/ui/switch';
 import { Button } from '../app/components/ui/button';
-import { Info, Layers, X } from 'lucide-react';
+import { Info, Layers, X, ZoomIn } from 'lucide-react';
+import type { Component360Type } from './Component360Viewer';
 import './GlobeSection.css';
 
 const STARLINK_SATS = Array.from({ length: 40 }).map((_, i) => ({
@@ -42,6 +43,7 @@ interface GlobeSectionProps {
   onArcSelect: (index: number | null) => void;
   onModeChange: (mode: string) => void;
   onSimulationSelect?: (mode: string) => void;
+  onOpen360?: (scene: Component360Type) => void;
 }
 
 type InspectorData = {
@@ -53,6 +55,7 @@ type InspectorData = {
   facts: Array<{ label: string; value: string }>;
   officialUrl?: string;
   mapQuery?: string;
+  scene360?: Component360Type;
 };
 
 type PreviewFocus = {
@@ -69,6 +72,7 @@ const buildCompanyInspectorData = (hub: CompanyHub): InspectorData => ({
   title: hub.name,
   imageUrl: INSPECTOR_IMAGES.dataCenter,
   logoUrl: hub.logoPath,
+  scene360: 'data-center',
   body: hub.description,
   officialUrl: hub.officialUrl,
   mapQuery: hub.mapQuery,
@@ -282,7 +286,7 @@ const RESOLVED_ARC_COLORS: Record<string, string> = {
 };
 
 export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
-  ({ selectedCity, selectedArc, simulationMode, decisionImpact, scenarioStory, scenarioRoute, onResetAll, onCitySelect, onArcSelect, onModeChange, onSimulationSelect }, ref) => {
+  ({ selectedCity, selectedArc, simulationMode, decisionImpact, scenarioStory, scenarioRoute, onResetAll, onCitySelect, onArcSelect, onModeChange, onSimulationSelect, onOpen360 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<any>(null);
   const arcsDataRef = useRef<any[]>([]);
@@ -419,6 +423,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       eyebrow: connection.type,
       title: `${fromCity.name} → ${toCity.name}`,
       imageUrl: INSPECTOR_IMAGES.fiber,
+      scene360: 'fiber',
       body: 'A fiber route carries data as pulses of light through glass strands. Long routes often cross oceans as protected submarine cables, then connect into land fiber and data centers near major cities.',
       facts: [
         { label: 'Cable', value: connection.cable },
@@ -453,6 +458,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       eyebrow: 'Low-earth-orbit satellite link',
       title: 'Starlink satellite relay',
       imageUrl: INSPECTOR_IMAGES.satellite,
+      scene360: 'satellite',
       body: 'LEO satellite internet sends data between a user dish, satellites above Earth, and ground gateways connected to the fiber internet. It helps remote areas connect where cables are limited.',
       facts: [
         { label: 'Orbit type', value: 'Low Earth Orbit' },
@@ -501,6 +507,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       eyebrow: 'Physical network component',
       title: previewLabel,
       imageUrl: INSPECTOR_IMAGES.fiber,
+      scene360: 'fiber',
       body: 'Fiber optic cable is the physical path that carries internet traffic as pulses of light. On the globe, fiber routes represent high-capacity backbone links between major cities, regions, and continents.',
       facts: [
         { label: 'Signal', value: 'Laser light pulses inside thin glass strands' },
@@ -542,6 +549,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             eyebrow: 'Cloud and data-center infrastructure',
             title: 'Cloud and data-center operators',
             imageUrl: INSPECTOR_IMAGES.dataCenter,
+            scene360: 'data-center',
             body: 'Company logo tiles mark operators that run cloud regions, edge networks, carrier-neutral data centers, CDNs, satellite gateways, or backbone infrastructure near major internet hubs.',
             facts: [
               { label: 'Typical site', value: 'Cloud region, carrier hotel, CDN POP, satellite gateway, or backbone meet-me room' },
@@ -571,6 +579,7 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
       eyebrow: 'Wireless network component',
       title: 'Low-earth-orbit satellite link',
       imageUrl: INSPECTOR_IMAGES.satellite,
+      scene360: 'satellite',
       body: 'LEO satellite markers represent orbital internet links. Traffic can travel from a user terminal to satellites, then down to ground gateways that connect back into the fiber internet.',
       facts: [
         { label: 'Best use', value: 'Remote areas, ships, aircraft, emergency backup, and rural coverage' },
@@ -2071,8 +2080,18 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
             <div className="globe-inspector-eyebrow">{inspectorData.eyebrow}</div>
             <div className="globe-inspector-title">{inspectorData.title}</div>
             <p className="globe-inspector-body">{inspectorData.body}</p>
-            {(inspectorData.officialUrl || inspectorData.mapQuery) && (
+            {(inspectorData.officialUrl || inspectorData.mapQuery || inspectorData.scene360) && (
               <div className="globe-inspector-actions">
+                {inspectorData.scene360 && (
+                  <button
+                    type="button"
+                    className="globe-inspector-link globe-inspector-zoom-btn"
+                    onClick={() => onOpen360?.(inspectorData.scene360!)}
+                  >
+                    <ZoomIn size={14} aria-hidden="true" />
+                    Zoom in 360
+                  </button>
+                )}
                 {inspectorData.officialUrl && (
                   <a
                     className="globe-inspector-link"
@@ -2311,6 +2330,14 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
           {selectedCityCompanyHubs.length > 0 && (
             <div className="city-dialog-company-section">
               <div className="city-dialog-company-title">Data center and company hubs in this area</div>
+              <button
+                type="button"
+                className="city-dialog-zoom-btn"
+                onClick={() => onOpen360?.('data-center')}
+              >
+                <ZoomIn size={15} aria-hidden="true" />
+                Zoom in 360 data center
+              </button>
               <div className="city-dialog-company-list">
                 {selectedCityCompanyHubs.map((hub) => (
                   <div key={hub.id} className="city-dialog-company-item">
@@ -2337,6 +2364,14 @@ export const GlobeSection = forwardRef<GlobeSectionRef, GlobeSectionProps>(
                     >
                       Official company page
                     </a>
+                    <button
+                      type="button"
+                      className="city-dialog-company-zoom"
+                      onClick={() => onOpen360?.('data-center')}
+                    >
+                      <ZoomIn size={14} aria-hidden="true" />
+                      Zoom in 360
+                    </button>
                     <div className="city-dialog-company-map">
                       <iframe
                         width="100%"

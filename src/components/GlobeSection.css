@@ -381,15 +381,19 @@
 .globe-inspector-link {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 28px;
   padding: 6px 9px;
+  border: none;
   border-radius: 8px;
   color: #bae6fd;
   background: rgba(14, 165, 233, 0.1);
+  font-family: var(--sans);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
   text-decoration: none;
+  cursor: pointer;
   box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.24);
 }
 
@@ -397,6 +401,11 @@
   color: #f8fafc;
   background: rgba(14, 165, 233, 0.2);
   box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.42);
+}
+
+.globe-inspector-zoom-btn {
+  color: #ffffff;
+  background: rgba(56, 189, 248, 0.22);
 }
 
 .globe-inspector-map {
@@ -940,6 +949,33 @@
   color: var(--text-bright);
 }
 
+.city-dialog-zoom-btn,
+.city-dialog-company-zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: flex-start;
+  min-height: 32px;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: rgba(14, 165, 233, 0.14);
+  color: #e0f2fe;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.24);
+}
+
+.city-dialog-zoom-btn:hover,
+.city-dialog-company-zoom:hover {
+  background: rgba(14, 165, 233, 0.24);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.42);
+}
+
 .city-dialog-company-list {
   display: flex;
   flex-direction: column;
@@ -1009,6 +1045,10 @@
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.city-dialog-company-zoom {
+  margin-top: 2px;
 }
 
 .city-dialog-company-logo {

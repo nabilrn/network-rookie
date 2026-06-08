@@ -1,4 +1,6 @@
 import { CITIES, CONNECTIONS } from '../data/network';
+import { ZoomIn } from 'lucide-react';
+import type { Component360Type } from './Component360Viewer';
 import './SelectionDrawer.css';
 
 // Helper: flag image from flagcdn.com using ISO country code
@@ -20,9 +22,10 @@ interface SelectionDrawerProps {
   selectedCity: number | null;
   selectedArc: number | null;
   onBack?: () => void;
+  onOpen360?: (scene: Component360Type) => void;
 }
 
-export function SelectionDrawer({ selectedCity, selectedArc, onBack }: SelectionDrawerProps) {
+export function SelectionDrawer({ selectedCity, selectedArc, onBack, onOpen360 }: SelectionDrawerProps) {
   const city = selectedCity !== null ? CITIES[selectedCity] : null;
   const connection = selectedArc !== null ? CONNECTIONS[selectedArc] : null;
   const fromCity = connection
@@ -90,6 +93,14 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
         </div>
 
         <div className="drawer-cable-badge">{cableTypeLabel}</div>
+        <button
+          type="button"
+          className="drawer-zoom-btn"
+          onClick={() => onOpen360?.('fiber')}
+        >
+          <ZoomIn size={15} aria-hidden="true" />
+          Zoom in 360 fiber optic
+        </button>
 
         <div className="drawer-step-list">
           {stepCards.map((step, index) => (
@@ -129,6 +140,14 @@ export function SelectionDrawer({ selectedCity, selectedArc, onBack }: Selection
       <div className="drawer-tier-badge">
         {city.hubTier === 1 ? 'Major internet hub' : 'Regional hub'}
       </div>
+      <button
+        type="button"
+        className="drawer-zoom-btn"
+        onClick={() => onOpen360?.('data-center')}
+      >
+        <ZoomIn size={15} aria-hidden="true" />
+        Zoom in 360 data center
+      </button>
 
       <blockquote className="drawer-friendly-quote">
         “{city.friendlyFact}”

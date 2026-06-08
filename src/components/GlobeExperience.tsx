@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import type { DecisionVisualImpact } from '../utils/simulationDecisionEngine';
 import { BrowserChrome } from '../components/BrowserChrome';
@@ -7,6 +7,7 @@ import { RightPanel, RightPanelRef } from '../components/RightPanel';
 import { Footer } from '../components/Footer';
 import { InactivityWatcher } from '../components/InactivityWatcher';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { Component360Viewer, type Component360Type } from '../components/Component360Viewer';
 import '../app/App.css';
 
 export const GlobeExperience = () => {
@@ -34,6 +35,7 @@ export const GlobeExperience = () => {
 
   const globeSectionRef = useRef<GlobeSectionRef>(null);
   const rightPanelRef = useRef<RightPanelRef>(null);
+  const [active360Scene, setActive360Scene] = useState<Component360Type | null>(null);
 
   const handleChatReset = () => {
     rightPanelRef.current?.resetChat();
@@ -104,6 +106,7 @@ export const GlobeExperience = () => {
           onArcSelect={setSelectedArc}
           onModeChange={handleModeChange}
           onSimulationSelect={handleSimulationControlSelect}
+          onOpen360={setActive360Scene}
         />
         <RightPanel
           ref={rightPanelRef}
@@ -132,6 +135,12 @@ export const GlobeExperience = () => {
         onChatReset={handleChatReset}
         onReset={handleSessionReset}
       />
+      {active360Scene && (
+        <Component360Viewer
+          initialScene={active360Scene}
+          onClose={() => setActive360Scene(null)}
+        />
+      )}
     </div>
   );
 };

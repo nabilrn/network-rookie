@@ -142,6 +142,31 @@
   padding: 5px 10px;
 }
 
+.drawer-zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: flex-start;
+  min-height: 32px;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: rgba(14, 165, 233, 0.14);
+  color: #e0f2fe;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.24);
+}
+
+.drawer-zoom-btn:hover {
+  background: rgba(14, 165, 233, 0.24);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.42);
+}
+
 .drawer-step-list {
   display: flex;
   flex-direction: column;
