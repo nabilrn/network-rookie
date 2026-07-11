@@ -585,7 +585,7 @@ async function callGemini(
   ctx: GeminiChatContext,
   simplifiedPrompt: boolean,
 ): Promise<{ payload: GeminiPayload; modelText: string }> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+  const apiKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) || 'MYPAAS_GEMINI_API_KEY_PLACEHOLDER';
   if (!apiKey) {
     throw new Error('Gemini API key is missing. Please set VITE_GEMINI_API_KEY.');
   }
