@@ -92,6 +92,11 @@
   "pnpm": {
     "overrides": {
       "vite": "6.3.5"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "@sveltejs/adapter-node"
+    ]
   }
 }
