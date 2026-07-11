@@ -17,7 +17,7 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/network-rookie/' : './',
+  base: '/',
 
   plugins: [
     figmaAssetResolver(),
